@@ -85,14 +85,19 @@ sudo pacman -S --needed base-devel cmake ninja \
     kstatusnotifieritem kiconthemes qqc2-desktop-style
 ```
 
-#### Ubuntu 24.04+ / Debian 13+:
+#### Ubuntu 24.10+ / 26.04 LTS, KDE neon или Debian 13 (Trixie):
+> [!NOTE]
+> В старой Ubuntu 24.04 LTS пакеты KDE Frameworks 6 отсутствуют в официальных репозиториях (релиз Noble базировался на KF5). Для пользователей Ubuntu 24.04 рекомендуется использовать готовый пакет **AppImage**. Для сборки из исходных кодов требуется Ubuntu 24.10+, 26.04 LTS, KDE neon или Debian 13 (Trixie).
+
 ```bash
 sudo apt update
 sudo apt install -y build-essential cmake ninja-build \
-    qt6-base-dev qt6-declarative-dev qt6-multimedia-dev libtag1-dev \
+    qt6-base-dev qt6-declarative-dev qt6-multimedia-dev qt6-svg-dev libtag1-dev \
     extra-cmake-modules libkf6coreaddons-dev libkf6colorscheme-dev \
     libkf6xmlgui-dev libkf6statusnotifieritem-dev libkf6iconthemes-dev \
-    qml6-module-org-kde-kirigami qml6-module-org-kde-qqc2desktopstyle
+    libkf6kirigami-dev libkf6qqc2desktopstyle-dev \
+    qml6-module-org-kde-kirigami qml6-module-org-kde-desktop \
+    qml6-module-qtquick-controls qml6-module-qtquick-effects qml6-module-qt-labs-platform
 ```
 
 #### Fedora 40+:

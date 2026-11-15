@@ -14,39 +14,43 @@ on:
   workflow_dispatch:
 
 env:
-  QT_VERSION: "6.8.*"
   ARTIFACT_RETENTION_DAYS: 14
 
 jobs:
 
   # =============================================================
-  # Linux x64 — AppImage + tar.gz
+  # Linux x64 — AppImage + tar.gz (Debian 13 Trixie)
   # =============================================================
 
   linux:
     name: Linux x64
     runs-on: ubuntu-24.04
+    container:
+      image: debian:trixie
 
     steps:
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Extract version
-        run: |
-          VERSION="$(sed -nE '/^project\(/,/^\)/s/.*VERSION[[:space:]]+([0-9.]+).*/\1/p' CMakeLists.txt | head -1)"
-          echo "VERSION=${VERSION:-1.0.0}" >> "$GITHUB_ENV"
 
       - name: Install build dependencies
         run: |
           export DEBIAN_FRONTEND=noninteractive
-          sudo add-apt-repository -y universe
-          sudo apt-get update
-          sudo apt-get install -y \
+          apt-get update
+          apt-get install -y \
             build-essential \
             cmake \
             ninja-build \
+            git \
+            curl \
+            wget \
             file \
+            patchelf \
+            fuse3 \
+            libfuse2t64 \
+            desktop-file-utils \
+            appstream \
+            qt6-base-dev \
+            qt6-declarative-dev \
+            qt6-multimedia-dev \
+            qt6-svg-dev \
             libtag1-dev \
             extra-cmake-modules \
             libkf6coreaddons-dev \
@@ -57,19 +61,28 @@ jobs:
             libkf6kirigami-dev \
             libkf6qqc2desktopstyle-dev \
             qml6-module-org-kde-kirigami \
-            qml6-module-org-kde-desktop
-          sudo apt-get install -y libfuse2t64 2>/dev/null || sudo apt-get install -y libfuse2 2>/dev/null || sudo apt-get install -y fuse || true
-          sudo apt-get install -y qml6-module-org-kde-qqc2desktopstyle 2>/dev/null || true
+            qml6-module-org-kde-desktop \
+            qml6-module-qtquick-controls \
+            qml6-module-qtquick-effects \
+            qml6-module-qt-labs-platform
 
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: ${{ env.QT_VERSION }}
-          host: linux
-          target: desktop
-          arch: linux_gcc_64
-          modules: qtmultimedia
-          cache: true
+          # Установка qqc2desktopstyle, если доступен под альтернативным именем
+          for pkg in $(apt-cache search qqc2desktopstyle 2>/dev/null | awk '{print $1}'); do
+            apt-get install -y "$pkg" || true
+          done
+          apt-get install -y qml6-module-org-kde-desktopstyle 2>/dev/null || true
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Safe Git Directory
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE" || true
+
+      - name: Extract version
+        run: |
+          VERSION="$(sed -nE '/^project\(/,/^\)/s/.*VERSION[[:space:]]+([0-9.]+).*/\1/p' CMakeLists.txt | head -1)"
+          echo "VERSION=${VERSION:-1.0.0}" >> "$GITHUB_ENV"
 
       - name: Configure
         run: |
@@ -95,6 +108,7 @@ jobs:
 
       - name: Build AppImage and Tarball
         run: |
+          export APPIMAGE_EXTRACT_AND_RUN=1
           ./scripts/build-appimage.sh
 
       - name: List artifacts
@@ -120,9 +134,11 @@ jobs:
   # =============================================================
 
   linux-compat:
-    name: AppImage start check (Ubuntu 24.04)
+    name: AppImage start check (Debian Trixie)
     needs: [linux]
     runs-on: ubuntu-24.04
+    container:
+      image: debian:trixie
 
     steps:
 
@@ -134,9 +150,8 @@ jobs:
       - name: Install runtime tools
         run: |
           export DEBIAN_FRONTEND=noninteractive
-          sudo add-apt-repository -y universe
-          sudo apt-get update
-          sudo apt-get install -y \
+          apt-get update
+          apt-get install -y \
             xvfb \
             libgl1 \
             libopengl0 \
@@ -158,17 +173,16 @@ jobs:
             libice6 \
             libdbus-1-3 \
             libpulse0 \
-            libsndfile1
-          sudo apt-get install -y libasound2t64 2>/dev/null || sudo apt-get install -y libasound2 || true
-          sudo apt-get install -y libfuse2t64 2>/dev/null || sudo apt-get install -y libfuse2 2>/dev/null || sudo apt-get install -y fuse || true
+            libsndfile1 \
+            libfuse2t64 \
+            fuse3
 
       - name: Start without network
         run: |
           chmod +x KYMusic-*.AppImage
-
+          export APPIMAGE_EXTRACT_AND_RUN=1
           set +e
-          # unshare -n убирает сеть, xvfb даёт дисплей, timeout возвращает 124/137
-          sudo unshare -n xvfb-run -a timeout --signal=KILL 25 \
+          xvfb-run -a timeout --signal=KILL 25 \
             ./KYMusic-*.AppImage --appimage-extract-and-run > app.log 2>&1
           code=$?
 
@@ -183,6 +197,7 @@ jobs:
       - name: Diagnose missing libraries
         if: failure()
         run: |
+          export APPIMAGE_EXTRACT_AND_RUN=1
           ./KYMusic-*.AppImage --appimage-extract >/dev/null 2>&1 || true
 
           echo "--- не найдены на этой системе ---"

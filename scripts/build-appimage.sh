@@ -15,6 +15,9 @@
 
 set -euo pipefail
 
+# Флаг для работы AppImage-инструментов в Docker / CI без необходимости FUSE
+export APPIMAGE_EXTRACT_AND_RUN=1
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TOOLS_DIR="${ROOT_DIR}/.tools"
 APPDIR="${ROOT_DIR}/build/appdir"
@@ -45,7 +48,7 @@ ensure_tool() {
     curl -fsSL -o "${path}" "${url}"
     chmod +x "${path}"
     rm -rf "${extracted}"
-    (cd "${TOOLS_DIR}" && "${path}" --appimage-extract >/dev/null)
+    (cd "${TOOLS_DIR}" && env APPIMAGE_EXTRACT_AND_RUN=1 "${path}" --appimage-extract >/dev/null)
     mv "${TOOLS_DIR}/squashfs-root" "${extracted}"
   fi
 }
@@ -121,7 +124,7 @@ EOF
     --plugin qt
 
   log "Building ${APPIMAGE_NAME}..."
-  OUTPUT="${ROOT_DIR}/${APPIMAGE_NAME}" run_tool "${LINUXDEPLOY_APPIMAGE}" \
+  OUTPUT="${ROOT_DIR}/${APPIMAGE_NAME}" APPIMAGE_EXTRACT_AND_RUN=1 run_tool "${LINUXDEPLOY_APPIMAGE}" \
     --appdir "${APPDIR}"
 
   log "Packaging ${TARBALL_NAME}..."
