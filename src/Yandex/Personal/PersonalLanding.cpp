@@ -5,6 +5,7 @@
 #include "../YandexClient.h"
 
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkReply>
 #include <QUrlQuery>

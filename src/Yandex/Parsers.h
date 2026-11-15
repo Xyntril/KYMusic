@@ -2,6 +2,7 @@
 
 #include "../Models/Track.h"
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 #include <QList>
 #include <QString>
