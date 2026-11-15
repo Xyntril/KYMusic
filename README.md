@@ -95,7 +95,7 @@ sudo apt install -y build-essential cmake ninja-build \
     qt6-base-dev qt6-declarative-dev qt6-multimedia-dev qt6-svg-dev libtag1-dev \
     extra-cmake-modules libkf6coreaddons-dev libkf6colorscheme-dev \
     libkf6xmlgui-dev libkf6statusnotifieritem-dev libkf6iconthemes-dev \
-    libkf6kirigami-dev libkf6qqc2desktopstyle-dev \
+    libkirigami-dev libkf6qqc2desktopstyle-dev \
     qml6-module-org-kde-kirigami qml6-module-org-kde-desktop \
     qml6-module-qtquick-controls qml6-module-qtquick-effects qml6-module-qt-labs-platform
 ```

@@ -58,7 +58,7 @@ jobs:
             libkf6xmlgui-dev \
             libkf6statusnotifieritem-dev \
             libkf6iconthemes-dev \
-            libkf6kirigami-dev \
+            libkirigami-dev \
             libkf6qqc2desktopstyle-dev \
             qml6-module-org-kde-kirigami \
             qml6-module-org-kde-desktop \
@@ -66,7 +66,8 @@ jobs:
             qml6-module-qtquick-effects \
             qml6-module-qt-labs-platform
 
-          # Установка qqc2desktopstyle, если доступен под альтернативным именем
+          # Установка альтернативных пакетов Kirigami / стилей, если они есть
+          apt-get install -y libkf6kirigami-dev 2>/dev/null || true
           for pkg in $(apt-cache search qqc2desktopstyle 2>/dev/null | awk '{print $1}'); do
             apt-get install -y "$pkg" || true
           done
