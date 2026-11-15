@@ -34,7 +34,6 @@ find_package(
         REQUIRED COMPONENTS
         Quick
         QuickControls2
-        QuickEffects
         Gui
         Widgets
         Network
@@ -688,7 +687,6 @@ target_link_libraries(
 
         Qt6::Quick
         Qt6::QuickControls2
-        Qt6::QuickEffects
         Qt6::Gui
         Qt6::Widgets
         Qt6::Network
