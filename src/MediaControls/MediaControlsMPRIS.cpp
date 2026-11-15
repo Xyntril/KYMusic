@@ -10,7 +10,7 @@
 
 namespace {
 constexpr auto kServiceName = "org.mpris.MediaPlayer2.kymusic";
-constexpr auto kFallbackServiceName = "org.mpris.MediaPlayer2.YaMusic";
+constexpr auto kFallbackServiceName = "org.mpris.MediaPlayer2.KYMusic";
 constexpr auto kObjectPath = "/org/mpris/MediaPlayer2";
 
 QString playbackStatusToString(SystemMediaControls::PlaybackStatus status) {

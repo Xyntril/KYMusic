@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# Сборка AppImage для Linux x86_64.
+# Сборка AppImage и tar.gz для Linux x86_64.
 #
 # Использование:
 #   ./scripts/build-appimage.sh        # сборка из уже установленного dist/
-#   ./scripts/build-appimage.sh --full # полный цикл: configure -> build -> install -> AppImage
+#   ./scripts/build-appimage.sh --full # полный цикл: configure -> build -> install -> AppImage + tar.gz
 #
 # Требования: cmake, ninja, Qt 6, linuxdeploy, linuxdeploy-plugin-qt,
 # linuxdeploy-plugin-appimage. Скрипт сам скачивает linuxdeploy-инструменты
@@ -29,9 +29,10 @@ LINUXDEPLOY_QT_URL="https://github.com/linuxdeploy/linuxdeploy-plugin-qt/release
 LINUXDEPLOY_APPIMAGE_URL="https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/1-alpha-20250213-1/linuxdeploy-plugin-appimage-x86_64.AppImage"
 
 VERSION="$(sed -nE '/^project\(/,/^\)/s/.*VERSION[[:space:]]+([0-9.]+).*/\1/p' "${ROOT_DIR}/CMakeLists.txt" | head -1)"
-VERSION="${VERSION:-0.0.0}"
+VERSION="${VERSION:-1.0.0}"
 
 APPIMAGE_NAME="KYMusic-${VERSION}-x86_64.AppImage"
+TARBALL_NAME="KYMusic-${VERSION}-linux-x86_64.tar.gz"
 
 log() { printf '\033[1;36m[appimage]\033[0m %s\n' "$*"; }
 
@@ -84,20 +85,54 @@ main() {
   export VERSION
   export QML_SOURCES_PATHS="${ROOT_DIR}/qml"
 
+  local desktop_file="${DIST_DIR}/share/applications/org.kde.kymusic.desktop"
+  if [[ ! -f "${desktop_file}" ]]; then
+    if [[ -f "${ROOT_DIR}/build/org.kde.kymusic.desktop" ]]; then
+      desktop_file="${ROOT_DIR}/build/org.kde.kymusic.desktop"
+    else
+      desktop_file="${ROOT_DIR}/build/org.kde.kymusic.desktop"
+      mkdir -p "$(dirname "${desktop_file}")"
+      cat <<EOF > "${desktop_file}"
+[Desktop Entry]
+Type=Application
+Name=KYMusic
+GenericName=Music Player
+Comment=Native KDE music player client for Yandex Music
+Exec=kymusic
+Icon=kymusic
+Terminal=false
+Categories=Qt;KDE;AudioVideo;Audio;Player;Music;
+EOF
+    fi
+  fi
+
+  local icon_file="${ROOT_DIR}/resources/kymusic.svg"
+  if [[ ! -f "${icon_file}" && -f "${DIST_DIR}/share/icons/hicolor/scalable/apps/kymusic.svg" ]]; then
+    icon_file="${DIST_DIR}/share/icons/hicolor/scalable/apps/kymusic.svg"
+  fi
+
   log "Bundling AppDir from dist/..."
   rm -rf "${APPDIR}"
   run_tool "${LINUXDEPLOY}" \
     --appdir "${APPDIR}" \
     --executable "${DIST_DIR}/bin/kymusic" \
-    --desktop-file "${DIST_DIR}/share/applications/org.kde.kymusic.desktop" \
-    --icon-file "${DIST_DIR}/share/icons/hicolor/scalable/apps/kymusic.svg" \
+    --desktop-file "${desktop_file}" \
+    --icon-file "${icon_file}" \
     --plugin qt
 
   log "Building ${APPIMAGE_NAME}..."
   OUTPUT="${ROOT_DIR}/${APPIMAGE_NAME}" run_tool "${LINUXDEPLOY_APPIMAGE}" \
     --appdir "${APPDIR}"
 
-  log "Done: ${ROOT_DIR}/${APPIMAGE_NAME}"
+  log "Packaging ${TARBALL_NAME}..."
+  mkdir -p "${ROOT_DIR}/pkg/KYMusic"
+  cp -a "${DIST_DIR}/." "${ROOT_DIR}/pkg/KYMusic/"
+  tar -C "${ROOT_DIR}/pkg" -czf "${ROOT_DIR}/${TARBALL_NAME}" KYMusic
+  rm -rf "${ROOT_DIR}/pkg"
+
+  log "Done:"
+  log "  AppImage: ${ROOT_DIR}/${APPIMAGE_NAME}"
+  log "  Tarball:  ${ROOT_DIR}/${TARBALL_NAME}"
 }
 
 main "$@"

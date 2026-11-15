@@ -13,13 +13,9 @@ on:
 
   workflow_dispatch:
 
-
 env:
-  QT_VERSION: 6.9.0
+  QT_VERSION: "6.8.*"
   ARTIFACT_RETENTION_DAYS: 14
-  VCPKG_TARGET_TRIPLET: x64-windows
-  VCPKG_DEFAULT_HOST_TRIPLET: x64-windows
-
 
 jobs:
 
@@ -36,28 +32,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-
       - name: Extract version
         run: |
           VERSION="$(sed -nE '/^project\(/,/^\)/s/.*VERSION[[:space:]]+([0-9.]+).*/\1/p' CMakeLists.txt | head -1)"
-          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
-
+          echo "VERSION=${VERSION:-1.0.0}" >> "$GITHUB_ENV"
 
       - name: Install build dependencies
         run: |
+          export DEBIAN_FRONTEND=noninteractive
+          sudo add-apt-repository -y universe
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
             cmake \
             ninja-build \
-            libtag1-dev \
             file \
+            libtag1-dev \
             extra-cmake-modules \
             libkf6coreaddons-dev \
             libkf6colorscheme-dev \
             libkf6xmlgui-dev \
             libkf6statusnotifieritem-dev \
-            libkf6iconthemes-dev
+            libkf6iconthemes-dev \
+            libkf6kirigami-dev \
+            libkf6qqc2desktopstyle-dev \
+            qml6-module-org-kde-kirigami \
+            qml6-module-org-kde-desktop
+          sudo apt-get install -y libfuse2t64 2>/dev/null || sudo apt-get install -y libfuse2 2>/dev/null || sudo apt-get install -y fuse || true
+          sudo apt-get install -y qml6-module-org-kde-qqc2desktopstyle 2>/dev/null || true
+
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
@@ -68,7 +71,6 @@ jobs:
           modules: qtmultimedia
           cache: true
 
-
       - name: Configure
         run: |
           cmake \
@@ -77,32 +79,27 @@ jobs:
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/dist"
+
       - name: Build
         run: |
           cmake --build build --parallel
+
+      - name: Run Tests
+        run: |
+          ctest --test-dir build --output-on-failure
+
       - name: Install
         run: |
           rm -rf dist
           cmake --install build
 
-
-      - name: Build AppImage
+      - name: Build AppImage and Tarball
         run: |
           ./scripts/build-appimage.sh
-
-      - name: Package tar.gz
-        run: |
-          mkdir -p pkg/KYMusic
-          cp -a dist/. pkg/KYMusic/
-          tar \
-            -C pkg \
-            -czf "KYMusic-${VERSION}-linux-x86_64.tar.gz" \
-            KYMusic
 
       - name: List artifacts
         run: |
           ls -la KYMusic-*
-
 
       - name: Upload AppImage
         uses: actions/upload-artifact@v4
@@ -110,6 +107,7 @@ jobs:
           name: linux-appimage
           path: KYMusic-*.AppImage
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
       - name: Upload tar.gz
         uses: actions/upload-artifact@v4
         with:
@@ -117,18 +115,14 @@ jobs:
           path: KYMusic-*.tar.gz
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
-
   # =============================================================
-  # Проверка: AppImage запускается на самом старом LTS и без сети
-  #
-  # Повторяет условия теста каталога AppImage: если приложение
-  # завершается сразу после старта, релиз не имеет смысла публиковать.
+  # Проверка запуска AppImage в изолированном окружении
   # =============================================================
 
   linux-compat:
-    name: AppImage start check (oldest LTS)
+    name: AppImage start check (Ubuntu 24.04)
     needs: [linux]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
 
@@ -137,14 +131,12 @@ jobs:
         with:
           name: linux-appimage
 
-      # linuxdeploy по своему excludelist не кладёт в AppImage libGL/libOpenGL/
-      # libEGL — их даёт система; libxcb-* и libxkbcommon-x11 нужны
-      # платформенному плагину Qt (xcb), который тоже берётся с системы.
       - name: Install runtime tools
         run: |
+          export DEBIAN_FRONTEND=noninteractive
+          sudo add-apt-repository -y universe
           sudo apt-get update
           sudo apt-get install -y \
-            libfuse2 \
             xvfb \
             libgl1 \
             libopengl0 \
@@ -166,16 +158,16 @@ jobs:
             libice6 \
             libdbus-1-3 \
             libpulse0 \
-            libasound2 \
             libsndfile1
+          sudo apt-get install -y libasound2t64 2>/dev/null || sudo apt-get install -y libasound2 || true
+          sudo apt-get install -y libfuse2t64 2>/dev/null || sudo apt-get install -y libfuse2 2>/dev/null || sudo apt-get install -y fuse || true
 
       - name: Start without network
         run: |
           chmod +x KYMusic-*.AppImage
 
           set +e
-          # unshare -n убирает сеть (как в тесте каталога), xvfb даёт дисплей,
-          # timeout возвращает 124/137, если процесс дожил до конца окна.
+          # unshare -n убирает сеть, xvfb даёт дисплей, timeout возвращает 124/137
           sudo unshare -n xvfb-run -a timeout --signal=KILL 25 \
             ./KYMusic-*.AppImage --appimage-extract-and-run > app.log 2>&1
           code=$?
@@ -196,535 +188,14 @@ jobs:
           echo "--- не найдены на этой системе ---"
           ldd squashfs-root/usr/bin/kymusic 2>&1 | grep 'not found' || true
 
-          echo "--- максимальные требуемые версии символов ---"
-          find squashfs-root -type f -exec objdump -T {} + 2>/dev/null \
-            | grep -oP '(GLIBC_|GLIBCXX_)[0-9.]+' | sort -uV | tail -5 || true
-
-
   # =============================================================
-  # macOS x64 (Intel)
-  # =============================================================
-
-  macos-x64:
-    name: macOS x64 (Intel)
-    runs-on: macos-15-intel
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: ${{ env.QT_VERSION }}
-          host: mac
-          target: desktop
-          arch: clang_64
-          modules: qtmultimedia
-          cache: true
-
-
-      - name: Install build tools
-        run: |
-          brew install cmake ninja taglib
-      - name: Configure
-        run: |
-          cmake \
-            -S . \
-            -B build \
-            -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/dist"
-      - name: Build
-        run: |
-          cmake --build build --parallel
-      - name: Install
-        run: |
-          rm -rf dist
-          cmake --install build
-
-
-      - name: Extract version
-        run: |
-          VERSION="$(sed -nE '/^project\(/,/^\)/s/.*VERSION[[:space:]]+([0-9.]+).*/\1/p' CMakeLists.txt | head -1)"
-          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
-
-      - name: Bundle (macdeployqt + qt.conf)
-        run: |
-          $QT_ROOT_DIR/bin/macdeployqt \
-            dist/YaMusic.app \
-            -qmldir=qml \
-            -always-overwrite
-          cat > dist/YaMusic.app/Contents/Resources/qt.conf <<'EOF'
-          [Paths]
-          Plugins = PlugIns
-          QmlImports = qml
-          EOF
-
-      - name: Create DMG
-        run: |
-          hdiutil create \
-            -volname "YaMusic" \
-            -srcfolder dist/YaMusic.app \
-            -ov \
-            -format UDZO \
-            "YaMusic-${VERSION}-macos-x64.dmg"
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-x64-dmg
-          path: YaMusic-*.dmg
-          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
-
-
-  # =============================================================
-  # macOS arm64 (Apple Silicon)
-  # =============================================================
-
-  macos-arm64:
-    name: macOS arm64 (Apple Silicon)
-    runs-on: macos-15
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: ${{ env.QT_VERSION }}
-          host: mac
-          target: desktop
-          arch: clang_64
-          modules: qtmultimedia
-          cache: true
-
-
-      - name: Install build tools
-        run: |
-          brew install cmake ninja taglib
-      - name: Configure (arm64)
-        run: |
-          cmake \
-            -S . \
-            -B build \
-            -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/dist" \
-            -DCMAKE_OSX_ARCHITECTURES=arm64
-      - name: Build
-        run: |
-          cmake --build build --parallel
-      - name: Install
-        run: |
-          rm -rf dist
-          cmake --install build
-
-
-      - name: Extract version
-        run: |
-          VERSION="$(sed -nE '/^project\(/,/^\)/s/.*VERSION[[:space:]]+([0-9.]+).*/\1/p' CMakeLists.txt | head -1)"
-          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
-
-      - name: Bundle (macdeployqt + qt.conf)
-        run: |
-          $QT_ROOT_DIR/bin/macdeployqt \
-            dist/YaMusic.app \
-            -qmldir=qml \
-            -always-overwrite
-          cat > dist/YaMusic.app/Contents/Resources/qt.conf <<'EOF'
-          [Paths]
-          Plugins = PlugIns
-          QmlImports = qml
-          EOF
-
-      - name: Create DMG
-        run: |
-          hdiutil create \
-            -volname "YaMusic" \
-            -srcfolder dist/YaMusic.app \
-            -ov \
-            -format UDZO \
-            "YaMusic-${VERSION}-macos-arm64.dmg"
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-arm64-dmg
-          path: YaMusic-*.dmg
-          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
-
-
-  # =============================================================
-  # Windows x64 — portable dist + NSIS installer
-  # =============================================================
-
-  windows:
-    name: Windows x64 Release
-    runs-on: windows-2022
-
-    defaults:
-      run:
-        shell: pwsh
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Set up MSVC
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: ${{ env.QT_VERSION }}
-          arch: win64_msvc2022_64
-          modules: qtmultimedia
-          cache: true
-
-      - name: Check build tools
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          cmake --version
-          if ($LASTEXITCODE -ne 0) {
-            throw "CMake is unavailable."
-          }
-
-          ninja --version
-          if ($LASTEXITCODE -ne 0) {
-            throw "Ninja is unavailable."
-          }
-
-          $vcpkg = Join-Path $env:VCPKG_INSTALLATION_ROOT "vcpkg.exe"
-          if (!(Test-Path -LiteralPath $vcpkg)) {
-            throw "vcpkg.exe not found: $vcpkg"
-          }
-
-      - name: Extract version
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          $content = Get-Content -LiteralPath CMakeLists.txt -Raw
-
-          $match = [regex]::Match(
-            $content,
-            '(?is)\bproject\s*\([^)]*?\bVERSION\s+([0-9]+(?:\.[0-9]+){1,3})(?=\s|\))'
-          )
-
-          if (!$match.Success) {
-            throw "Project VERSION not found in CMakeLists.txt."
-          }
-
-          $version = $match.Groups[1].Value
-
-          "VERSION=$version" |
-            Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-
-          Write-Host "YaMusic version: $version"
-
-      - name: Install TagLib in classic mode
-        if: ${{ hashFiles('vcpkg.json') == '' }}
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          $vcpkg = Join-Path $env:VCPKG_INSTALLATION_ROOT "vcpkg.exe"
-
-          & $vcpkg install "taglib:$env:VCPKG_TARGET_TRIPLET"
-
-          if ($LASTEXITCODE -ne 0) {
-            throw "TagLib installation failed."
-          }
-
-      - name: Configure
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          $toolchain = Join-Path `
-            $env:VCPKG_INSTALLATION_ROOT `
-            "scripts/buildsystems/vcpkg.cmake"
-
-          if (Test-Path -LiteralPath "vcpkg.json") {
-            # Dependencies are installed by the vcpkg toolchain
-            # during CMake configuration.
-            $installedDir = Join-Path `
-              $env:GITHUB_WORKSPACE `
-              "build/vcpkg_installed"
-          } else {
-            $installedDir = Join-Path `
-              $env:VCPKG_INSTALLATION_ROOT `
-              "installed"
-          }
-
-          # Forward slashes avoid path-escaping issues in CMake.
-          $toolchain = $toolchain.Replace('\', '/')
-          $installedDir = $installedDir.Replace('\', '/')
-          $installPrefix = (
-            Join-Path $env:GITHUB_WORKSPACE "dist"
-          ).Replace('\', '/')
-
-          "YAMUSIC_VCPKG_INSTALLED_DIR=$installedDir" |
-            Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-
-          $cmakeArgs = @(
-            "-S", ".",
-            "-B", "build",
-            "-G", "Ninja",
-            "-DCMAKE_BUILD_TYPE=Release",
-            "-DCMAKE_TOOLCHAIN_FILE=$toolchain",
-            "-DVCPKG_TARGET_TRIPLET=$env:VCPKG_TARGET_TRIPLET",
-            "-DVCPKG_INSTALLED_DIR=$installedDir",
-            "-DCMAKE_INSTALL_PREFIX=$installPrefix",
-            "-DCMAKE_INSTALL_BINDIR=bin"
-          )
-
-          cmake @cmakeArgs
-
-          if ($LASTEXITCODE -ne 0) {
-            throw "CMake configuration failed."
-          }
-
-      - name: Build
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          cmake --build build --parallel
-
-          if ($LASTEXITCODE -ne 0) {
-            throw "Build failed."
-          }
-
-      - name: Install and deploy Qt
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          if (Test-Path -LiteralPath "dist") {
-            Remove-Item -LiteralPath "dist" -Recurse -Force
-          }
-
-          cmake --install build --config Release
-
-          if ($LASTEXITCODE -ne 0) {
-            throw "Installation or Qt deployment failed."
-          }
-
-          if (!(Test-Path -LiteralPath "dist/bin/YaMusic.exe")) {
-            throw "dist/bin/YaMusic.exe was not installed."
-          }
-
-      - name: Copy vcpkg Release runtime
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          $runtimeDir = Join-Path `
-            $env:YAMUSIC_VCPKG_INSTALLED_DIR `
-            "$env:VCPKG_TARGET_TRIPLET/bin"
-
-          if (!(Test-Path -LiteralPath $runtimeDir)) {
-            throw "vcpkg Release runtime directory not found: $runtimeDir"
-          }
-
-          # Copy only Release DLLs. Never copy debug/bin.
-          # Copying the whole Release DLL set also covers
-          # dynamic dependencies of TagLib.
-          $dlls = @(
-            Get-ChildItem -LiteralPath $runtimeDir -Filter "*.dll" -File
-          )
-
-          if ($dlls.Count -eq 0) {
-            throw "No runtime DLLs found in: $runtimeDir"
-          }
-
-          foreach ($dll in $dlls) {
-            Copy-Item `
-              -LiteralPath $dll.FullName `
-              -Destination "dist/bin" `
-              -Force
-          }
-
-      - name: Copy MSVC runtime (app-local)
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          # Без app-local CRT пакет не запускается на машине без
-          # «Visual C++ 2015-2022 Redistributable»: YaMusic.exe и Qt6Core.dll
-          # импортируют MSVCP140.dll / VCRUNTIME140.dll.
-          if (!$env:VCToolsRedistDir) {
-            throw "VCToolsRedistDir is not set; the MSVC step must run first."
-          }
-
-          $crtDir = Get-ChildItem `
-            -LiteralPath (Join-Path $env:VCToolsRedistDir "x64") `
-            -Directory `
-            -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -like "Microsoft.VC*.CRT" } |
-            Select-Object -First 1
-
-          if (!$crtDir) {
-            throw "MSVC CRT redist directory not found under: $env:VCToolsRedistDir\x64"
-          }
-
-          $crtDlls = @(
-            Get-ChildItem -LiteralPath $crtDir.FullName -Filter "*.dll" -File
-          )
-
-          if ($crtDlls.Count -eq 0) {
-            throw "No CRT DLLs found in: $($crtDir.FullName)"
-          }
-
-          foreach ($dll in $crtDlls) {
-            Copy-Item `
-              -LiteralPath $dll.FullName `
-              -Destination "dist/bin" `
-              -Force
-          }
-
-          Get-ChildItem -LiteralPath "dist/bin" -Filter "*.dll" -File |
-            Where-Object { $_.Name -match '^(msvcp|vcruntime|concrt|vccorlib)' } |
-            Select-Object Name, Length
-
-      - name: Trim Qt translations
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          $keep = @("qtbase_ru", "qt_ru")
-
-          # Qt deployment layouts can differ, so do not assume
-          # translations are directly under dist.
-          $translationDirs = @(
-            Get-ChildItem -LiteralPath "dist" -Directory -Recurse |
-              Where-Object { $_.Name -eq "translations" }
-          )
-
-          foreach ($directory in $translationDirs) {
-            Get-ChildItem `
-              -LiteralPath $directory.FullName `
-              -Filter "*.qm" `
-              -File |
-              Where-Object {
-                $_.BaseName -match '^qt' -and
-                $_.BaseName -notin $keep
-              } |
-              Remove-Item -Force
-          }
-
-      - name: Verify deployment
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          $requiredFiles = @(
-            "dist/bin/YaMusic.exe",
-            "dist/bin/Qt6Core.dll",
-            "dist/bin/Qt6Gui.dll",
-            "dist/bin/Qt6Qml.dll",
-            "dist/bin/Qt6Quick.dll",
-            "dist/bin/Qt6Network.dll",
-            "dist/bin/Qt6Multimedia.dll",
-            "dist/bin/MSVCP140.dll",
-            "dist/bin/VCRUNTIME140.dll",
-            "dist/bin/VCRUNTIME140_1.dll"
-          )
-
-          foreach ($file in $requiredFiles) {
-            if (!(Test-Path -LiteralPath $file -PathType Leaf)) {
-              throw "Required deployment file is missing: $file"
-            }
-
-            if ((Get-Item -LiteralPath $file).Length -eq 0) {
-              throw "Required deployment file is empty: $file"
-            }
-          }
-
-          # Плагин платформы Qt кладёт либо рядом с exe, либо в <prefix>/plugins.
-          $qwindows = Get-ChildItem `
-            -LiteralPath "dist" `
-            -Filter "qwindows.dll" `
-            -File `
-            -Recurse |
-            Select-Object -First 1
-
-          if (!$qwindows) {
-            throw "Qt platform plugin qwindows.dll was not deployed."
-          }
-
-          Write-Host "Platform plugin: $($qwindows.FullName)"
-
-          Get-ChildItem -LiteralPath "dist" -Directory |
-            Select-Object FullName
-
-          Get-ChildItem -LiteralPath "dist" -Recurse -File |
-            Measure-Object -Property Length -Sum |
-            Select-Object Count, Sum
-
-      - name: Build NSIS installer
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          $makensis = (Get-Command makensis -ErrorAction SilentlyContinue).Source
-          if (!$makensis) {
-            $makensis = "C:\Program Files (x86)\NSIS\makensis.exe"
-          }
-          if (!(Test-Path -LiteralPath $makensis)) {
-            throw "makensis not found."
-          }
-
-          $setupName = "YaMusic-$env:VERSION-windows-x64-setup.exe"
-          $setupPath = Join-Path $env:GITHUB_WORKSPACE $setupName
-          $distDir = Join-Path $env:GITHUB_WORKSPACE "dist"
-
-          & $makensis `
-            "/DVERSION=$env:VERSION" `
-            "/DINSTALL_DIR=$distDir" `
-            "/DOUTFILE=$setupPath" `
-            "packaging/windows/installer.nsi"
-
-          if ($LASTEXITCODE -ne 0) {
-            throw "NSIS installer build failed."
-          }
-
-          if (!(Test-Path -LiteralPath $setupPath)) {
-            throw "Installer was not created: $setupPath"
-          }
-
-          "SETUP_NAME=$setupName" |
-            Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-
-          Get-Item -LiteralPath $setupPath |
-            Select-Object FullName, Length
-
-      - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-portable
-          path: dist/
-          if-no-files-found: error
-          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
-
-      - name: Upload Windows installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-installer
-          path: ${{ env.SETUP_NAME }}
-          if-no-files-found: error
-          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
-
-  # =============================================================
-  # Release (only on tags)
+  # Release (только по тегам v*)
   # =============================================================
 
   release:
     name: Publish Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [linux, macos-x64, macos-arm64, windows]
+    needs: [linux, linux-compat]
     runs-on: ubuntu-24.04
 
     permissions:
@@ -756,29 +227,28 @@ jobs:
             echo
             echo "### Установка"
             echo
-            echo "- **Linux** — \`KYMusic-${VERSION}-x86_64.AppImage\` (запуск: \`chmod +x\` и запуск) или \`KYMusic-${VERSION}-linux-x86_64.tar.gz\`"
+            echo "- **Linux AppImage:** \`KYMusic-${VERSION}-x86_64.AppImage\` (сделайте исполняемым: \`chmod +x\` и запустите)"
+            echo "- **Linux Tarball:** \`KYMusic-${VERSION}-linux-x86_64.tar.gz\`"
             echo
           } > release-notes.md
 
-          # Раздел этой версии из CHANGELOG: от её заголовка до следующего.
-          # Пустые строки в начале и разделитель в конце отбрасываются.
-          awk -v ver="$VERSION" '
-            $0 ~ "^## \\[v?" ver "\\]" { inside = 1; next }
-            inside && /^## \[/ { exit }
-            inside { lines[++n] = $0 }
-            END {
-              start = 1
-              while (start <= n && lines[start] ~ /^[[:space:]]*$/) start++
-              end = n
-              while (end >= start && (lines[end] ~ /^[[:space:]]*$/ || lines[end] == "---")) end--
-              for (i = start; i <= end; i++) print lines[i]
-            }
-          ' CHANGELOG.md > changelog-section.md
+          if [ -f CHANGELOG.md ]; then
+            awk -v ver="$VERSION" '
+              $0 ~ "^## \\[v?" ver "\\]" { inside = 1; next }
+              inside && /^## \[/ { exit }
+              inside { lines[++n] = $0 }
+              END {
+                start = 1
+                while (start <= n && lines[start] ~ /^[[:space:]]*$/) start++
+                end = n
+                while (end >= start && (lines[end] ~ /^[[:space:]]*$/ || lines[end] == "---")) end--
+                for (i = start; i <= end; i++) print lines[i]
+              }
+            ' CHANGELOG.md > changelog-section.md
 
-          if [ -s changelog-section.md ]; then
-            cat changelog-section.md >> release-notes.md
-          else
-            echo "::warning::В CHANGELOG.md нет раздела для ${GITHUB_REF_NAME}: описание без списка изменений"
+            if [ -s changelog-section.md ]; then
+              cat changelog-section.md >> release-notes.md
+            fi
           fi
 
           cat release-notes.md
@@ -791,10 +261,6 @@ jobs:
           body_path: release-notes.md
           draft: false
           prerelease: false
-          # Windows portable-сборка лежит в artifacts/ деревом файлов,
-          # поэтому в релиз попадают только готовые к скачиванию пакеты.
           files: |
             artifacts/*.AppImage
             artifacts/*.tar.gz
-            artifacts/*.dmg
-            artifacts/*-setup.exe

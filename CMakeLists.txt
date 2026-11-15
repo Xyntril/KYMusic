@@ -30,7 +30,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # =============================================================
 
 find_package(
-        Qt6 6.9
+        Qt6 6.6
         REQUIRED COMPONENTS
         Quick
         QuickControls2
@@ -44,7 +44,7 @@ find_package(
 if(UNIX AND NOT APPLE)
 
     find_package(
-            Qt6 6.9
+            Qt6 6.6
             REQUIRED COMPONENTS
             DBus
     )
@@ -75,7 +75,7 @@ list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 # TagLib — запись тегов и вложенного артворка в скачанные файлы.
 find_package(TagLib REQUIRED)
 
-qt_standard_project_setup(REQUIRES 6.9)
+qt_standard_project_setup(REQUIRES 6.6)
 
 # =============================================================
 # Paths
@@ -869,7 +869,7 @@ endif()
 
 if(UNIX AND NOT APPLE)
   # Linux: свой deploy-скрипт вместо qt_generate_deploy_qml_app_script.
-  # Пропускаем установку переводов. В CI (Qt 6.9.0) опций
+  # Пропускаем установку переводов. В CI (Qt 6.8 / 6.6) опций
   # EXCLUDE_PLUGIN_TYPES/EXCLUDE_PLUGINS нет, а qt6ct-плагин туда не входит,
   # поэтому генерируем опцию исключения только если qt6ct реально установлен
   # в этом окружении (иначе локальный плагин бандлится и падает на RPATH).
@@ -938,7 +938,7 @@ endif()
 enable_testing()
 
 find_package(
-        Qt6 6.9
+        Qt6 6.6
         REQUIRED COMPONENTS
         Test
 )
