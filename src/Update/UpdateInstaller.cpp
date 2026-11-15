@@ -20,9 +20,9 @@ namespace {
 QString updateTempPath() {
   const QString base = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
 
-  if (base.isEmpty()) return QDir::tempPath() + QStringLiteral("/yamusic-update");
+  if (base.isEmpty()) return QDir::tempPath() + QStringLiteral("/kymusic-update");
 
-  return base + QStringLiteral("/yamusic-update");
+  return base + QStringLiteral("/kymusic-update");
 }
 
 // Путь приложения, в кавычках-одиночках для sh: одинарные кавычки внутри
@@ -151,7 +151,7 @@ void UpdateInstaller::startDownload() {
   setStatus(QStringLiteral("Скачивание обновления..."));
 
   QNetworkRequest request(m_asset.url);
-  request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("YaMusic/%1").arg(m_version));
+  request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("KYMusic/%1").arg(m_version));
   request.setRawHeader("Accept", "application/octet-stream");
   request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                        QNetworkRequest::NoLessSafeRedirectPolicy);
@@ -270,7 +270,7 @@ void UpdateInstaller::prepareReplacement() {
     return;
   }
 
-  m_stagedAppPath = tempPath + QStringLiteral("/YaMusic-") + m_version + QStringLiteral(".app");
+  m_stagedAppPath = tempPath + QStringLiteral("/KYMusic-") + m_version + QStringLiteral(".app");
 
   QDir().remove(m_stagedAppPath);
 

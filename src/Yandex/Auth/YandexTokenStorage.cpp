@@ -8,8 +8,14 @@ constexpr const char *TokenKey = "yandex/token";
 } // namespace
 
 QString YandexTokenStorage::load() {
-  QSettings settings(OrganizationName, ApplicationName);
-  return settings.value(TokenKey).toString();
+  QSettings appSettings;
+  const QString token = appSettings.value(TokenKey).toString();
+  if (!token.isEmpty()) {
+    return token;
+  }
+
+  QSettings legacySettings(OrganizationName, ApplicationName);
+  return legacySettings.value(TokenKey).toString();
 }
 
 bool YandexTokenStorage::saveToken(const QString &token) {
@@ -17,15 +23,29 @@ bool YandexTokenStorage::saveToken(const QString &token) {
     return false;
   }
 
-  QSettings settings(OrganizationName, ApplicationName);
-  settings.setValue(TokenKey, token);
-  settings.sync();
-  return settings.status() == QSettings::NoError;
+  QSettings appSettings;
+  appSettings.setValue(TokenKey, token);
+  appSettings.sync();
+
+  QSettings legacySettings(OrganizationName, ApplicationName);
+  legacySettings.setValue(TokenKey, token);
+  legacySettings.sync();
+
+  return true;
 }
 
 bool YandexTokenStorage::clearToken() {
-  QSettings settings(OrganizationName, ApplicationName);
-  settings.remove(TokenKey);
-  settings.sync();
-  return settings.status() == QSettings::NoError;
+  QSettings appSettings;
+  appSettings.remove(TokenKey);
+  appSettings.remove("yandex/token");
+  appSettings.remove("token");
+  appSettings.sync();
+
+  QSettings legacySettings(OrganizationName, ApplicationName);
+  legacySettings.remove(TokenKey);
+  legacySettings.remove("yandex/token");
+  legacySettings.remove("token");
+  legacySettings.sync();
+
+  return true;
 }

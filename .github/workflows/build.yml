@@ -1,4 +1,4 @@
-name: Build YaMusic
+name: Build KYMusic
 
 on:
   push:
@@ -29,13 +29,7 @@ jobs:
 
   linux:
     name: Linux x64
-    # Сборка только на старом LTS: glibc и libstdc++ линкуются по системе
-    # сборки, и AppImage с 24.04 требует GLIBC_2.38 / GLIBCXX_3.4.32, то есть
-    # не запускается на Ubuntu 22.04 и Debian 12 (тест каталога AppImage идёт
-    # именно на самом старом поддерживаемом LTS).
-    # ubuntu-22.04 объявлен устаревшим 17.09.2026 и снимется 17.04.2027 —
-    # до этой даты джоб перевести на container: ubuntu:22.04.
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
 
@@ -57,7 +51,13 @@ jobs:
             cmake \
             ninja-build \
             libtag1-dev \
-            file
+            file \
+            extra-cmake-modules \
+            libkf6coreaddons-dev \
+            libkf6colorscheme-dev \
+            libkf6xmlgui-dev \
+            libkf6statusnotifieritem-dev \
+            libkf6iconthemes-dev
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
@@ -92,29 +92,29 @@ jobs:
 
       - name: Package tar.gz
         run: |
-          mkdir -p pkg/YaMusic
-          cp -a dist/. pkg/YaMusic/
+          mkdir -p pkg/KYMusic
+          cp -a dist/. pkg/KYMusic/
           tar \
             -C pkg \
-            -czf "YaMusic-${VERSION}-linux-x86_64.tar.gz" \
-            YaMusic
+            -czf "KYMusic-${VERSION}-linux-x86_64.tar.gz" \
+            KYMusic
 
       - name: List artifacts
         run: |
-          ls -la YaMusic-*
+          ls -la KYMusic-*
 
 
       - name: Upload AppImage
         uses: actions/upload-artifact@v4
         with:
           name: linux-appimage
-          path: YaMusic-*.AppImage
+          path: KYMusic-*.AppImage
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       - name: Upload tar.gz
         uses: actions/upload-artifact@v4
         with:
           name: linux-tarball
-          path: YaMusic-*.tar.gz
+          path: KYMusic-*.tar.gz
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
 
@@ -171,13 +171,13 @@ jobs:
 
       - name: Start without network
         run: |
-          chmod +x YaMusic-*.AppImage
+          chmod +x KYMusic-*.AppImage
 
           set +e
           # unshare -n убирает сеть (как в тесте каталога), xvfb даёт дисплей,
           # timeout возвращает 124/137, если процесс дожил до конца окна.
           sudo unshare -n xvfb-run -a timeout --signal=KILL 25 \
-            ./YaMusic-*.AppImage --appimage-extract-and-run > app.log 2>&1
+            ./KYMusic-*.AppImage --appimage-extract-and-run > app.log 2>&1
           code=$?
 
           cat app.log
@@ -191,10 +191,10 @@ jobs:
       - name: Diagnose missing libraries
         if: failure()
         run: |
-          ./YaMusic-*.AppImage --appimage-extract >/dev/null 2>&1 || true
+          ./KYMusic-*.AppImage --appimage-extract >/dev/null 2>&1 || true
 
           echo "--- не найдены на этой системе ---"
-          ldd squashfs-root/usr/bin/yamusic 2>&1 | grep 'not found' || true
+          ldd squashfs-root/usr/bin/kymusic 2>&1 | grep 'not found' || true
 
           echo "--- максимальные требуемые версии символов ---"
           find squashfs-root -type f -exec objdump -T {} + 2>/dev/null \
@@ -750,15 +750,13 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
 
           {
-            echo "## YaMusic ${GITHUB_REF_NAME}"
+            echo "## KYMusic ${GITHUB_REF_NAME}"
             echo
-            echo "Сборка для macOS (Intel и Apple Silicon), Linux и Windows."
+            echo "Нативный клиент Яндекс Музыки для KDE Plasma и Plasma Mobile."
             echo
             echo "### Установка"
             echo
-            echo "- **Windows** — \`YaMusic-${VERSION}-windows-x64-setup.exe\` (установщик; portable-сборка — в артефактах сборки)"
-            echo "- **macOS** — \`YaMusic-${VERSION}-macos-x64.dmg\` (Intel) или \`YaMusic-${VERSION}-macos-arm64.dmg\` (Apple Silicon)"
-            echo "- **Linux** — \`YaMusic-${VERSION}-x86_64.AppImage\` (запуск: \`chmod +x\` и запуск) или \`YaMusic-${VERSION}-linux-x86_64.tar.gz\`"
+            echo "- **Linux** — \`KYMusic-${VERSION}-x86_64.AppImage\` (запуск: \`chmod +x\` и запуск) или \`KYMusic-${VERSION}-linux-x86_64.tar.gz\`"
             echo
           } > release-notes.md
 
@@ -789,7 +787,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: YaMusic ${{ github.ref_name }}
+          name: KYMusic ${{ github.ref_name }}
           body_path: release-notes.md
           draft: false
           prerelease: false

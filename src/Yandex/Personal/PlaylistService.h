@@ -31,6 +31,7 @@ signals:
   void playlistsReceived(const QList<Playlist> &playlists);
   void similarPlaylistsReceived(const QList<Playlist> &playlists);
   void userPlaylistsReceived(const QList<PersonalPlaylist> &playlists);
+  void playlistCoverUpdated(int kind, const QString &coverUri);
   void playlistCreated(const QString &title);
   void playlistDeleted(int kind);
   void playlistRenamed(const QString &newTitle);

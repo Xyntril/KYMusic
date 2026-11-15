@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Идеи по развитию проекта. Пожалуйста, не дублируйте пункты из [ROADMAP.md](https://github.com/andfriden/YaMusic/blob/main/ROADMAP.md) — там уже расписаны ближайшие версии.
+        Идеи по развитию проекта. Пожалуйста, не дублируйте пункты из [ROADMAP.md](https://github.com/Xyntril/KYMusic/blob/main/ROADMAP.md) — там уже расписаны ближайшие версии.
 
   - type: textarea
     id: problem
@@ -33,7 +33,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Версия YaMusic
-      placeholder: v0.14.3
+      label: Версия KYMusic
+      placeholder: v1.0.0
     validations:
       required: false

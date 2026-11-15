@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <defs>
+    <!-- Breeze Drop Shadow -->
+    <filter id="shadow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#0a1926" flood-opacity="0.45"/>
+    </filter>
+
+    <!-- Linear Gradients for Origami Facets -->
+    <linearGradient id="basePlate" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1d99f3"/>
+      <stop offset="100%" stop-color="#0e65a3"/>
+    </linearGradient>
+
+    <linearGradient id="topFold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4fd3ff"/>
+      <stop offset="100%" stop-color="#2196f3"/>
+    </linearGradient>
+
+    <linearGradient id="rightFold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00e5ff"/>
+      <stop offset="100%" stop-color="#00b4d8"/>
+    </linearGradient>
+
+    <linearGradient id="bottomFold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1976d2"/>
+      <stop offset="100%" stop-color="#0b457b"/>
+    </linearGradient>
+
+    <linearGradient id="noteFacetLight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#e0f7fa"/>
+    </linearGradient>
+
+    <linearGradient id="noteFacetMid" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#b2ebf2"/>
+      <stop offset="100%" stop-color="#80deea"/>
+    </linearGradient>
+
+    <linearGradient id="noteFacetDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4dd0e1"/>
+      <stop offset="100%" stop-color="#26c6da"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Base Plate with Breeze 8px Rounded Corners -->
+  <rect x="4" y="4" width="40" height="40" rx="9" fill="url(#basePlate)" filter="url(#shadow)"/>
+
+  <!-- Breeze 1px Specular Highlight Top Edge -->
+  <path d="M 13 4 L 35 4 C 40 4 44 8 44 13 L 44 14 C 44 8.6 39.8 4.7 35 4.7 L 13 4.7 C 8.2 4.7 4 8.6 4 14 L 4 13 C 4 8 8 4 13 4 Z" fill="#ffffff" opacity="0.32"/>
+
+  <!-- Breeze Origami Facet 1: Top-Left Triangle -->
+  <polygon points="4,13 4,4 13,4 26,17 12,25" fill="url(#topFold)"/>
+
+  <!-- Breeze Origami Facet 2: Upper-Right Fold -->
+  <polygon points="13,4 35,4 44,13 36,25 26,17" fill="url(#rightFold)" opacity="0.95"/>
+
+  <!-- 45-degree Crisp Diagonal Cast Shadow under Origami fold -->
+  <polygon points="26,17 38,29 34,44 18,44 12,38" fill="#041a2e" opacity="0.32"/>
+  <polygon points="36,25 44,33 44,22" fill="#041a2e" opacity="0.22"/>
+
+  <!-- Breeze Origami Facet 3: Lower-Left Fold -->
+  <polygon points="4,13 12,25 18,44 13,44 4,35" fill="url(#bottomFold)"/>
+
+  <!-- Center-Right Fold -->
+  <polygon points="26,17 36,25 44,13 44,35 34,44 18,44 12,25" fill="#1377be" opacity="0.6"/>
+
+  <!-- 45° Long Shadow from the Note Motif -->
+  <polygon points="23,15 35,27 41,33 41,44 33,44 21,32 17,28 17,25" fill="#031626" opacity="0.28"/>
+
+  <!-- === Origami Geometric Music Motif (Beamed Hexagonal Note & Wave) === -->
+  <!-- Equalizer Prism Bars -->
+  <polygon points="9,26 12,23 12,35 9,35" fill="url(#noteFacetMid)" opacity="0.9"/>
+  <polygon points="10.5,24.5 12,23 12,35 10.5,35" fill="url(#noteFacetLight)"/>
+
+  <polygon points="14,19 17,16 17,35 14,35" fill="url(#noteFacetMid)"/>
+  <polygon points="15.5,17.5 17,16 17,35 15.5,35" fill="url(#noteFacetLight)"/>
+
+  <!-- Origami Beamed Notes -->
+  <!-- Top Angled Beam -->
+  <polygon points="21,15 37,10 37,14 21,19" fill="url(#noteFacetLight)"/>
+  <polygon points="21,17 37,12 37,14 21,19" fill="url(#noteFacetDark)"/>
+
+  <!-- Left Stem -->
+  <polygon points="21,15 24,14 24,31 21,31" fill="url(#noteFacetMid)"/>
+  <polygon points="22.5,14.5 24,14 24,31 22.5,31" fill="url(#noteFacetLight)"/>
+
+  <!-- Right Stem -->
+  <polygon points="34,11 37,10 37,27 34,27" fill="url(#noteFacetMid)"/>
+  <polygon points="35.5,10.5 37,10 37,27 35.5,27" fill="url(#noteFacetLight)"/>
+
+  <!-- Geometric Origami Note Heads (Rhombus / Hexagon) -->
+  <polygon points="17,31 24,28 27,33 20,36" fill="url(#noteFacetLight)"/>
+  <polygon points="20,36 27,33 25,35 18,34" fill="url(#noteFacetDark)"/>
+
+  <polygon points="30,27 37,24 40,29 33,32" fill="url(#noteFacetLight)"/>
+  <polygon points="33,32 40,29 38,31 31,30" fill="url(#noteFacetDark)"/>
+
+  <!-- 1px Bottom Inset Border -->
+  <path d="M 4 35 C 4 40 8 44 13 44 L 35 44 C 40 44 44 40 44 35 L 44 35.8 C 44 40.8 40 44.8 35 44.8 L 13 44.8 C 8 44.8 4 40.8 4 35.8 Z" fill="#041624" opacity="0.4"/>
+</svg>

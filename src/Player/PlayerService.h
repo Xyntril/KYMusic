@@ -49,6 +49,7 @@ public slots:
   void pause();
   void resume();
   void stop();
+  void repeatCurrentTrack();
   void togglePlayback();
   void seek(qint64 position);
   void setVolume(float volume);

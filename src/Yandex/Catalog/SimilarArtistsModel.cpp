@@ -31,12 +31,14 @@ void SimilarArtistsModel::setArtists(const QList<Artist> &artists) {
   beginResetModel();
   m_artists = artists;
   endResetModel();
+  emit countChanged();
 }
 
 void SimilarArtistsModel::clear() {
   beginResetModel();
   m_artists.clear();
   endResetModel();
+  emit countChanged();
 }
 
 Artist SimilarArtistsModel::artistAt(int index) const {

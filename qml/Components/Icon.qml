@@ -1,26 +1,64 @@
 import QtQuick
 import QtQuick.Shapes
+import org.kde.kirigami as Kirigami
+import YaMusic 1.0
 
-// Единый набор иконок плеера (взяты из yandex-music-client / mashiro).
-// Каждый глиф — один или несколько SVG-path в координатах 24×24.
-// filled-глифы (play/pause/next/prev/heartFilled/mini) рисуются заливкой,
-// остальные — штрихом. Все path-ы глифа склеиваются в одну строку и
-// отдаются единственному PathSvg, который понимает несколько M-команд.
+// Единый набор иконок плеера с поддержкой нативных системных иконок KDE
+// (Kirigami.Icon / Breeze / Oxygen) и надёжным фолбэком на встроенные SVG-пути.
 Item {
     id: root
 
     // Имя глифа: play, pause, next, prev, shuffle, repeat, repeatOne,
     // chevronLeft, chevronRight, chevronDown, heart, heartFilled, heartOff,
-    // lyrics, queue, expand, mini, close, note, sport.
+    // lyrics, queue, expand, mini, close, note, sport и др.
     property string glyph: ""
     property color color: AppTheme.textPrimary
     property real size: 20
     property real strokeWidth: 1.7
+    property bool preferSystemIcon: true
 
     readonly property bool filled:
         root.glyph === "play" || root.glyph === "pause" ||
         root.glyph === "next" || root.glyph === "prev" ||
         root.glyph === "heartFilled" || root.glyph === "mini"
+
+    readonly property string systemIconName:
+        preferSystemIcon ? (systemIconMap[root.glyph] || "") : ""
+
+    readonly property var systemIconMap: ({
+        play: "media-playback-start",
+        pause: "media-playback-pause",
+        next: "media-skip-forward",
+        prev: "media-skip-backward",
+        shuffle: "media-playlist-shuffle",
+        repeat: "media-playlist-repeat",
+        repeatOne: "media-playlist-repeat-song",
+        chevronLeft: "go-previous",
+        chevronRight: "go-next",
+        chevronDown: "go-down",
+        close: "window-close",
+        search: "edit-find",
+        settings: "configure",
+        note: "audio-x-generic",
+        stats: "view-statistics",
+        expand: "view-fullscreen",
+        queue: "media-track-queue",
+        heart: "non-starred-symbolic",
+        heartFilled: "starred-symbolic",
+        heartOff: "dialog-cancel",
+        star: "starred-symbolic",
+        starOff: "non-starred-symbolic",
+        lyrics: "view-media-lyrics",
+        wave: "network-wireless",
+        chart: "view-media-recent",
+        genre: "view-media-genre",
+        station: "radio",
+        podcast: "podcast",
+        playlist: "view-media-playlist",
+        sport: "chronometer",
+        download: "download",
+        mini: "window-minimize"
+    })
 
     readonly property string pathData:
         (glyphMap[root.glyph] || []).join(" ")
@@ -39,8 +77,8 @@ Item {
         chevronLeft: ["M14.5 5 8 12l6.5 7"],
         chevronRight: ["M9.5 5 16 12l-6.5 7"],
         chevronDown: ["M5 9l7 7 7-7"],
-        heart: ["M12 20c-1.2-.9-7.5-5-7.5-9.6A3.9 3.9 0 0 1 12 7.8a3.9 3.9 0 0 1 7.5 2.6c0 4.6-6.3 8.7-7.5 9.6z"],
-        heartFilled: ["M12 20.2c-1.3-.9-7.7-5.2-7.7-9.8A4.1 4.1 0 0 1 12 7.6a4.1 4.1 0 0 1 7.7 2.8c0 4.6-6.4 8.9-7.7 9.8z"],
+        heart: ["M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"],
+        heartFilled: ["M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"],
         heartOff: ["M12 20c-1.2-.9-7.5-5-7.5-9.6A3.9 3.9 0 0 1 12 7.8a3.9 3.9 0 0 1 7.5 2.6c0 4.6-6.3 8.7-7.5 9.6z M4 3.5 20 20.5"],
         lyrics: ["M4 5.6h12 M10 5.6v10.3 M13.8 10h6.2 M13.8 14.1h6.2 M8.4 18.4h11.6"],
         queue: ["M4 7h11 M4 12h11 M4 17h7 M17.5 17.5a2 2 0 1 0 4 0V7l-4 1.2z"],
@@ -48,7 +86,7 @@ Item {
         mini: ["M4.6 5.6h14.8v12.8H4.6z M12.4 12.4h6v5h-6z"],
         close: ["M6.4 6.4 17.6 17.6 M17.6 6.4 6.4 17.6"],
         note: ["M9.5 17.5V6.4L18 4.5v11.1 M7 20a2.5 2.5 0 1 0 2.5-2.5 M15.5 18.1a2.5 2.5 0 1 0 2.5-2.5"],
-artist: ["M12 14.2a3.1 3.1 0 0 0 3.1-3.1V6.6a3.1 3.1 0 0 0-6.2 0v4.5a3.1 3.1 0 0 0 3.1 3.1z", "M6.8 11.4a5.2 5.2 0 0 0 10.4 0", "M12 17.4v3"],
+        artist: ["M12 14.2a3.1 3.1 0 0 0 3.1-3.1V6.6a3.1 3.1 0 0 0-6.2 0v4.5a3.1 3.1 0 0 0 3.1 3.1z", "M6.8 11.4a5.2 5.2 0 0 0 10.4 0", "M12 17.4v3"],
         wave: ["M3.5 13.5c3-5 6 5 9 0s6-5 9 0", "M3.5 18.5c3-5 6 5 9 0s6-5 9 0"],
         chart: ["M5 19V10 M12 19V5 M19 19v-7"],
         genre: ["M12 21a9 9 0 1 1 9-9 12 12 0 0 1-12 12", "M4 12h6a6 6 0 0 1 6 6"],
@@ -61,11 +99,28 @@ artist: ["M12 14.2a3.1 3.1 0 0 0 3.1-3.1V6.6a3.1 3.1 0 0 0-6.2 0v4.5a3.1 3.1 0 0
         sport: ["M8 12h8 M5 8.5v7 M8 10v4 M16 10v4 M19 8.5v7"]
     })
 
-    Shape {
-        anchors.centerIn: parent
+    // 1. Системная иконка KDE / Kirigami (Breeze / Oxygen)
+    Kirigami.Icon {
+        id: kirigamiIcon
 
+        anchors.centerIn: parent
+        width: root.size
+        height: root.size
+
+        source: root.systemIconName
+        color: root.color
+        visible: root.systemIconName !== "" && valid
+    }
+
+    // 2. Встроенный SVG-фолбэк
+    Shape {
+        id: fallbackShape
+
+        anchors.centerIn: parent
         width: 24
         height: 24
+
+        visible: !kirigamiIcon.visible
 
         antialiasing: true
         smooth: true

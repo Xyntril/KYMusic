@@ -18,7 +18,7 @@ namespace {
 // них при каждом запуске.
 constexpr auto kSeenReportsKey = "crash/seenReports";
 
-constexpr auto kRepositoryUrl = "https://github.com/andfriden/YaMusic";
+constexpr auto kRepositoryUrl = "https://github.com/Xyntril/KYMusic";
 
 } // namespace
 

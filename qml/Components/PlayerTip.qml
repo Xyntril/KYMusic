@@ -1,5 +1,5 @@
 import QtQuick
-import QtQuick.Controls.Basic
+import QtQuick.Controls
 import YaMusic 1.0
 
 // Всплывающая подсказка для кнопок плеера. Появляется над кнопкой через

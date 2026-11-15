@@ -1,5 +1,5 @@
 import QtQuick
-import QtQuick.Controls.Basic
+import QtQuick.Controls
 
 Label {
     id: root
@@ -7,14 +7,23 @@ Label {
     property string message: "Готово"
     property int hideDelay: 3000
 
-    height: 24
+    height: 32
+    leftPadding: 16
+    rightPadding: 16
 
     text: message
 
-    color: AppTheme.textSecondary
+    color: AppTheme.textPrimary
 
     horizontalAlignment: Text.AlignHCenter
     verticalAlignment: Text.AlignVCenter
+
+    background: Rectangle {
+        radius: 16
+        color: AppTheme.panel
+        border.color: AppTheme.border
+        border.width: 1
+    }
 
     elide: Text.ElideRight
 
@@ -24,7 +33,22 @@ Label {
     Behavior on opacity { NumberAnimation { duration: 200 } }
 
     function show(text) {
-        root.message = text
+        const raw = String(text || "").trim()
+        if (raw.length === 0) return
+
+        // Подавляем любые отладочные, технические и шлюзовые сетевые тосты
+        if (/колесо/i.test(raw) ||
+            /загружен/i.test(raw) ||
+            /gateway/i.test(raw) ||
+            /502|503|504/.test(raw) ||
+            /элементов \d+/i.test(raw) ||
+            /моя волна/i.test(raw) ||
+            /загрузка/i.test(raw)) {
+            console.log("Suppressed status toast:", raw)
+            return
+        }
+
+        root.message = raw
         root.opacity = 1
         hideTimer.restart()
     }

@@ -1,14 +1,14 @@
 import QtQuick
-import QtQuick.Controls.Basic
+import QtQuick.Controls as QQC2
 import QtQuick.Layouts
+import org.kde.kirigami as Kirigami
 import YaMusic 1.0
 
 Item {
     id: root
 
-    property var controller
+    property var controller: null
 
-    // Страница занимает всю высоту области просмотра, а не свою контентную.
     readonly property bool fillHeight: true
 
     width: parent ? parent.width : 0
@@ -16,899 +16,682 @@ Item {
     implicitWidth: width
     implicitHeight: height
 
+    readonly property bool isMobile:
+        (typeof window !== "undefined" && window.isMobileMode) || width < 800
+
     readonly property var stats:
         root.controller !== null && root.controller !== undefined &&
         root.controller.statsController !== undefined
             ? root.controller.statsController
             : null
 
+    Kirigami.PromptDialog {
+        id: resetDialog
+        title: qsTr("Сброс статистики")
+        subtitle: qsTr("Вы действительно хотите обнулить всю историю прослушиваний?")
+        standardButtons: Kirigami.Dialog.Yes | Kirigami.Dialog.Cancel
+        onAccepted: {
+            if (root.stats) {
+                root.stats.reset()
+            }
+        }
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        color: AppTheme.backgroundPrimary
+    }
+
     Flickable {
         id: pageFlickable
-
         anchors.fill: parent
-
         clip: true
         boundsBehavior: Flickable.StopAtBounds
-
         contentWidth: width
-        contentHeight: contentColumn.implicitHeight + 40
+        contentHeight: mainContentColumn.implicitHeight + (root.isMobile ? 24 : 48)
 
-        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+        QQC2.ScrollBar.vertical: QQC2.ScrollBar {
+            id: statsScrollBar
+            policy: QQC2.ScrollBar.AsNeeded
+            width: root.isMobile ? 3 : 10
+            opacity: root.isMobile ? (active ? 0.5 : 0) : 1
+            Behavior on opacity { NumberAnimation { duration: 150 } }
+        }
 
-        Column {
-            id: contentColumn
-
-            width: pageFlickable.width - 40
+        ColumnLayout {
+            id: mainContentColumn
             anchors.left: parent.left
-            anchors.leftMargin: 20
+            anchors.right: parent.right
             anchors.top: parent.top
-            anchors.topMargin: 20
+            anchors.margins: root.isMobile ? 12 : 24
+            spacing: root.isMobile ? 16 : 24
 
-            spacing: 28
-
-            Row {
-                width: parent.width
+            // =================================================================
+            // ЗАГОЛОВОК СТРАНИЦЫ + КНОПКА СБРОСА
+            // =================================================================
+            RowLayout {
+                Layout.fillWidth: true
                 spacing: 12
 
-                Label {
-                    width: parent.width - resetButton.width - parent.spacing
+                QQC2.ToolButton {
+                    visible: root.isMobile && typeof mainLayout !== "undefined" && !mainLayout.canGoBack
+                    icon.name: "application-menu"
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("Меню")
+                    onClicked: {
+                        if (typeof mainLayout !== "undefined" && mainLayout.openMenu) {
+                            mainLayout.openMenu(this)
+                        }
+                    }
+                }
 
-                    text: "Статистика прослушивания"
-                    color: AppTheme.textPrimary
-                    font.pixelSize: 28
+                Kirigami.Heading {
+                    Layout.fillWidth: true
+                    level: 1
+                    text: qsTr("Статистика прослушивания")
                     font.bold: true
-
-                    verticalAlignment: Text.AlignVCenter
-                    wrapMode: Text.Wrap
+                    elide: Text.ElideRight
                 }
 
-                Rectangle {
-                    id: resetButton
-
-                    width: resetLabel.implicitWidth + 24
-                    height: 32
-
-                    anchors.verticalCenter: parent.verticalCenter
-
-                    radius: 8
-                    color: resetMouse.containsMouse ? AppTheme.panelActive : AppTheme.panel
-                    border.width: 1
-                    border.color: AppTheme.borderSubtle
-
-                    Label {
-                        id: resetLabel
-
-                        anchors.centerIn: parent
-
-                        text: "Сбросить"
-                        color: resetMouse.containsMouse ? AppTheme.error : AppTheme.textSecondary
-                        font.pixelSize: 12
-                    }
-
-                    MouseArea {
-                        id: resetMouse
-
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-
-                        onClicked: {
-                            if (root.stats) {
-                                root.stats.reset()
-                            }
-                        }
-                    }
+                QQC2.Button {
+                    text: qsTr("Сбросить")
+                    icon.name: "edit-clear-all"
+                    enabled: root.stats && root.stats.totalPlays > 0
+                    onClicked: resetDialog.open()
                 }
             }
 
-            // Сводка.
-            Rectangle {
-                width: parent.width
-                height: 100
+            // =================================================================
+            // 4 КАРТОЧКИ СВОДКИ (Desktop: 4 колонки, Mobile: 2x2)
+            // =================================================================
+            Grid {
+                Layout.fillWidth: true
+                columns: root.isMobile ? 2 : 4
+                rowSpacing: 12
+                columnSpacing: 12
 
-                radius: 12
-                color: AppTheme.panel
-                border.width: 1
-                border.color: AppTheme.borderSubtle
+                readonly property real itemWidth:
+                    Math.floor((mainContentColumn.width - (columns - 1) * columnSpacing) / columns)
 
-                Row {
-                    anchors.fill: parent
-                    anchors.margins: 16
-
-                    spacing: 8
-
-                    Item {
-                        width: parent.width / 4 - parent.spacing / 2
-                        height: parent.height
-
-                        Column {
-                            anchors.centerIn: parent
-                            spacing: 4
-
-                            Label {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: root.stats ? root.stats.totalPlays : 0
-                                color: AppTheme.textPrimary
-                                font.pixelSize: 20
-                                font.bold: true
-                            }
-
-                            Label {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: "Прослушиваний"
-                                color: AppTheme.textSecondary
-                                font.pixelSize: 11
-                                horizontalAlignment: Text.AlignHCenter
-                                wrapMode: Text.Wrap
-                            }
-                        }
-                    }
-
-                    Item {
-                        width: parent.width / 4 - parent.spacing / 2
-                        height: parent.height
-
-                        Column {
-                            anchors.centerIn: parent
-                            spacing: 4
-
-                            Label {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: root.stats ? AppTheme.formatTime(root.stats.totalPlayTimeMs) : "0:00"
-                                color: AppTheme.textPrimary
-                                font.pixelSize: 20
-                                font.bold: true
-                            }
-
-                            Label {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: "Времени в музыке"
-                                color: AppTheme.textSecondary
-                                font.pixelSize: 11
-                                horizontalAlignment: Text.AlignHCenter
-                                wrapMode: Text.Wrap
-                            }
-                        }
-                    }
-
-                    Item {
-                        width: parent.width / 4 - parent.spacing / 2
-                        height: parent.height
-
-                        Column {
-                            anchors.centerIn: parent
-                            spacing: 4
-
-                            Label {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: root.stats ? root.stats.trackCount : 0
-                                color: AppTheme.textPrimary
-                                font.pixelSize: 20
-                                font.bold: true
-                            }
-
-                            Label {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: "Треков"
-                                color: AppTheme.textSecondary
-                                font.pixelSize: 11
-                                horizontalAlignment: Text.AlignHCenter
-                                wrapMode: Text.Wrap
-                            }
-                        }
-                    }
-
-                    Item {
-                        width: parent.width / 4 - parent.spacing / 2
-                        height: parent.height
-
-                        Column {
-                            anchors.centerIn: parent
-                            spacing: 4
-
-                            Label {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: root.stats ? root.stats.artistCount : 0
-                                color: AppTheme.textPrimary
-                                font.pixelSize: 20
-                                font.bold: true
-                            }
-
-                            Label {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: "Исполнителей"
-                                color: AppTheme.textSecondary
-                                font.pixelSize: 11
-                                horizontalAlignment: Text.AlignHCenter
-                                wrapMode: Text.Wrap
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Минуты по дням.
-            Column {
-                width: parent.width
-                spacing: 12
-
-                RowLayout {
-                    width: parent.width
-                    spacing: 8
-
-                    Label {
-                        text: "Минуты по дням"
-                        color: AppTheme.textPrimary
-                        font.pixelSize: 20
-                        font.bold: true
-                    }
-
-                    Item {
-                        Layout.fillWidth: true
-                    }
-
-                    Label {
-                        id: chartSummaryLabel
-
-                        text: chartSummary()
-                        color: AppTheme.textSecondary
-                        font.pixelSize: 12
-                        verticalAlignment: Text.AlignVCenter
-                        horizontalAlignment: Text.AlignRight
-
-                        function chartSummary() {
-                            if (!root.stats || !chartCard.hasData) return "за 30 дней"
-                            return "пик " + chartCard.maxMinutes + " мин · в среднем " +
-                                chartCard.avgMinutes() + " мин"
-                        }
-                    }
-                }
-
+                // Карточка 1: Прослушиваний
                 Rectangle {
-                    id: chartCard
-
-                    width: parent.width
-                    height: 190
-
-                    radius: 12
-                    color: AppTheme.panel
+                    width: parent.itemWidth
+                    height: 84
+                    radius: Kirigami.Units.cornerRadius
+                    color: Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.65)
                     border.width: 1
-                    border.color: AppTheme.borderSubtle
+                    border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
 
-                    // Актуальные данные по дням (пересчитываются на смене темы).
-                    readonly property var chartData: {
-                        root.stats
-                        AppTheme.dark
-                        return root.stats ? root.stats.dailyMinutes(30) : []
-                    }
-
-                    // Максимум минут — для масштаба столбиков.
-                    readonly property int maxMinutes: {
-                        let m = 0
-                        for (const row of chartCard.chartData) {
-                            m = Math.max(m, Number(row.minutes))
-                        }
-                        return m
-                    }
-
-                    // Пусто, если за период ничего не слушали.
-                    readonly property bool hasData: {
-                        for (const row of chartCard.chartData) {
-                            if (Number(row.minutes) > 0) return true
-                        }
-                        return false
-                    }
-
-                    // Сколько дней из периода было непусто.
-                    function activeDays() {
-                        let n = 0
-                        for (const row of chartCard.chartData) {
-                            if (Number(row.minutes) > 0) n++
-                        }
-                        return n
-                    }
-
-                    // Среднее минут в день за весь период (в том числе пустые дни).
-                    function avgMinutes() {
-                        const data = chartCard.chartData
-                        if (data.length === 0) return 0
-                        let sum = 0
-                        for (const row of data) {
-                            sum += Number(row.minutes)
-                        }
-                        return Math.round(sum / data.length)
-                    }
-
-                    // Область графика: шкала минут слева + столбики, подписи дат снизу.
-                    Column {
-                        id: chartArea
-
+                    ColumnLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 12
-                        anchors.rightMargin: 12
-                        anchors.topMargin: 24
-                        anchors.bottomMargin: 6
-
+                        anchors.margins: 12
                         spacing: 2
 
-                        // Верх: шкала + столбики.
-                        Row {
-                            width: parent.width
-                            height: parent.height - 14
-
-                            spacing: 6
-
-                            // Вертикальная шкала минут: 0 внизу, max наверху.
-                            Item {
-                                id: yAxis
-
-                                width: 30
-                                height: parent.height
-
-                                Repeater {
-                                    model: 3
-
-                                    delegate: Item {
-                                        required property int index
-
-                                        anchors.fill: parent
-
-                                        readonly property real lineY:
-                                            yAxis.height / 2 * index
-
-                                        // Линия сетки.
-                                        Rectangle {
-                                            anchors.left: parent.left
-                                            anchors.right: parent.right
-
-                                            height: 1
-                                            y: parent.height - lineY - 1
-
-                                            color: AppTheme.borderSubtle
-                                            opacity: 0.85
-                                        }
-
-                                        // Подпись значения.
-                                        Label {
-                                            anchors.right: parent.right
-
-                                            y: parent.height - lineY - 6
-
-                                            text: {
-                                                const max = chartCard.maxMinutes
-                                                const steps = [0, Math.ceil(max / 2), max]
-                                                return steps.length > index ? steps[index] : 0
-                                            }
-                                            color: AppTheme.textMuted
-                                            font.pixelSize: 9
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Линейный график (плавная линия с заполнением).
-                            Canvas {
-                                id: lineChart
-
-                                width: parent.width - 30 - parent.spacing
-                                height: parent.height
-
-                                antialiasing: true
-
-                                onPaint: lineChart.drawChart()
-
-                                onWidthChanged: lineChart.requestPaint()
-                                onHeightChanged: lineChart.requestPaint()
-
-                                Connections {
-                                    target: root.stats
-                                    function onStatsChanged() {
-                                        lineChart.requestPaint()
-                                    }
-                                }
-
-                                function drawChart() {
-                                    const ctx = lineChart.getContext("2d")
-                                    ctx.reset()
-                                    lineChart.drawLine(ctx)
-                                }
-
-                                function drawLine(ctx) {
-                                    const w = lineChart.width
-                                    const h = lineChart.height
-                                    const data = chartCard.chartData
-                                    const n = data.length
-                                    if (n <= 0) return
-
-                                    // Максимум для масштаба.
-                                    let max = chartCard.maxMinutes
-                                    if (max <= 0) max = 1
-
-                                    const padX = 2
-                                    const padTop = 4
-                                    const padBottom = 4
-                                    const plotH = h - padTop - padBottom
-
-                                    const stepX = n > 1
-                                        ? (w - padX * 2) / (n - 1)
-                                        : 0
-
-                                    // Точки (x, y).
-                                    const pts = []
-                                    for (let i = 0; i < n; i++) {
-                                        const v = Number(data[i].minutes)
-                                        const x = padX + (n > 1 ? i * stepX : w / 2)
-                                        const ratio = Math.max(0, Math.min(1, v / max))
-                                        const y = h - padBottom - plotH * ratio
-                                        pts.push({ x: x, y: y })
-                                    }
-
-                                    // Сглаживание через кривые Безье.
-                                    const first = pts[0]
-                                    const last = pts[n - 1]
-                                    const pathPts = lineChart.buildSmooth(pts)
-
-                                    // Заполнение: путь + закрытие до низа.
-                                    ctx.beginPath()
-                                    ctx.moveTo(first.x, first.y)
-                                    for (const t of pathPts) {
-                                        ctx.bezierCurveTo(t.c1x, t.c1y, t.c2x, t.c2y, t.x, t.y)
-                                    }
-                                    ctx.lineTo(last.x, h - padBottom)
-                                    ctx.lineTo(first.x, h - padBottom)
-                                    ctx.closePath()
-
-                                    const fillGrad = ctx.createLinearGradient(0, padTop, 0, h)
-                                    fillGrad.addColorStop(0, Qt.rgba(
-                                        AppTheme.accent.r, AppTheme.accent.g,
-                                        AppTheme.accent.b, 0.35))
-                                    fillGrad.addColorStop(1, Qt.rgba(
-                                        AppTheme.accent.r, AppTheme.accent.g,
-                                        AppTheme.accent.b, 0.05))
-                                    ctx.fillStyle = fillGrad
-                                    ctx.fill()
-
-                                    // Сама линия поверх.
-                                    ctx.beginPath()
-                                    ctx.moveTo(first.x, first.y)
-                                    for (const t of pathPts) {
-                                        ctx.bezierCurveTo(t.c1x, t.c1y, t.c2x, t.c2y, t.x, t.y)
-                                    }
-                                    ctx.strokeStyle = Qt.rgba(
-                                        AppTheme.accent.r, AppTheme.accent.g,
-                                        AppTheme.accent.b, 1)
-                                    ctx.lineWidth = 2
-                                    ctx.lineJoin = "round"
-                                    ctx.lineCap = "round"
-                                    ctx.stroke()
-                                }
-
-                                // Строит плавные сегменты Безье между точками:
-                                // возвращает массив {x,y,c1x,c1y,c2x,c2y}.
-                                function buildSmooth(pts) {
-                                    const out = []
-                                    const n = pts.length
-                                    if (n === 0) return out
-                                    out.push({
-                                        x: pts[0].x, y: pts[0].y,
-                                        c1x: pts[0].x, c1y: pts[0].y,
-                                        c2x: pts[0].x, c2y: pts[0].y
-                                    })
-                                    for (let i = 1; i < n; i++) {
-                                        const p0 = pts[i - 1]
-                                        const p1 = pts[i]
-                                        const c1x = p0.x + (p1.x - p0.x) * 0.5
-                                        const c2x = p0.x + (p1.x - p0.x) * 0.5
-                                        out.push({
-                                            x: p1.x, y: p1.y,
-                                            c1x: c1x, c1y: p0.y,
-                                            c2x: c2x, c2y: p1.y
-                                        })
-                                    }
-                                    return out
-                                }
-                            }
+                        QQC2.Label {
+                            Layout.fillWidth: true
+                            text: root.stats ? String(root.stats.totalPlays) : "0"
+                            font.pixelSize: 22
+                            font.bold: true
+                            color: Kirigami.Theme.highlightColor
                         }
 
-                        // Низ: подписи дат.
-                        Row {
-                            width: parent.width - 36
-                            x: 36 // сдвиг под шкалу минут
-                            height: 12
+                        QQC2.Label {
+                            Layout.fillWidth: true
+                            text: qsTr("Всего прослушиваний")
+                            font.pixelSize: 11
+                            color: Kirigami.Theme.disabledTextColor
+                            elide: Text.ElideRight
+                        }
+                    }
+                }
 
-                            spacing: 2
+                // Карточка 2: Время в музыке
+                Rectangle {
+                    width: parent.itemWidth
+                    height: 84
+                    radius: Kirigami.Units.cornerRadius
+                    color: Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.65)
+                    border.width: 1
+                    border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 12
+                        spacing: 2
+
+                        QQC2.Label {
+                            Layout.fillWidth: true
+                            text: root.stats ? AppTheme.formatTime(root.stats.totalPlayTimeMs) : "0:00"
+                            font.pixelSize: 22
+                            font.bold: true
+                            color: Kirigami.Theme.textColor
+                        }
+
+                        QQC2.Label {
+                            Layout.fillWidth: true
+                            text: qsTr("Времени в музыке")
+                            font.pixelSize: 11
+                            color: Kirigami.Theme.disabledTextColor
+                            elide: Text.ElideRight
+                        }
+                    }
+                }
+
+                // Карточка 3: Треков
+                Rectangle {
+                    width: parent.itemWidth
+                    height: 84
+                    radius: Kirigami.Units.cornerRadius
+                    color: Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.65)
+                    border.width: 1
+                    border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 12
+                        spacing: 2
+
+                        QQC2.Label {
+                            Layout.fillWidth: true
+                            text: root.stats ? String(root.stats.trackCount) : "0"
+                            font.pixelSize: 22
+                            font.bold: true
+                            color: Kirigami.Theme.textColor
+                        }
+
+                        QQC2.Label {
+                            Layout.fillWidth: true
+                            text: qsTr("Треков")
+                            font.pixelSize: 11
+                            color: Kirigami.Theme.disabledTextColor
+                            elide: Text.ElideRight
+                        }
+                    }
+                }
+
+                // Карточка 4: Исполнителей
+                Rectangle {
+                    width: parent.itemWidth
+                    height: 84
+                    radius: Kirigami.Units.cornerRadius
+                    color: Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.65)
+                    border.width: 1
+                    border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 12
+                        spacing: 2
+
+                        QQC2.Label {
+                            Layout.fillWidth: true
+                            text: root.stats ? String(root.stats.artistCount) : "0"
+                            font.pixelSize: 22
+                            font.bold: true
+                            color: Kirigami.Theme.textColor
+                        }
+
+                        QQC2.Label {
+                            Layout.fillWidth: true
+                            text: qsTr("Исполнителей")
+                            font.pixelSize: 11
+                            color: Kirigami.Theme.disabledTextColor
+                            elide: Text.ElideRight
+                        }
+                    }
+                }
+            }
+
+            // =================================================================
+            // ГРАФИК «МИНУТЫ ПО ДНЯМ» (KDE Breeze Style, padding: 16)
+            // =================================================================
+            Rectangle {
+                id: chartCard
+                Layout.fillWidth: true
+                implicitHeight: 220
+                radius: Kirigami.Units.cornerRadius
+                color: Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.65)
+                border.width: 1
+                border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
+
+                readonly property var chartData: root.stats ? root.stats.dailyMinutes(30) : []
+                readonly property int maxMinutes: {
+                    let m = 0
+                    for (const row of chartData) {
+                        m = Math.max(m, Number(row.minutes || 0))
+                    }
+                    return Math.max(1, m)
+                }
+
+                readonly property int avgMinutes: {
+                    if (!chartData || chartData.length === 0) return 0
+                    let sum = 0
+                    for (const row of chartData) sum += Number(row.minutes || 0)
+                    return Math.round(sum / chartData.length)
+                }
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 16
+                    spacing: 8
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        Kirigami.Heading {
+                            level: 3
+                            text: qsTr("Минуты по дням")
+                            font.bold: true
+                        }
+
+                        Item { Layout.fillWidth: true }
+
+                        QQC2.Label {
+                            text: qsTr("Пик: %1 мин · В среднем: %2 мин / день").arg(chartCard.maxMinutes).arg(chartCard.avgMinutes)
+                            font.pixelSize: 12
+                            wrapMode: Text.WordWrap
+                            color: Kirigami.Theme.disabledTextColor
+                            horizontalAlignment: Text.AlignRight
+                            Layout.maximumWidth: parent.width * 0.6
+                        }
+                    }
+
+                    // Область Canvas графика
+                    Item {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+
+                        Canvas {
+                            id: chartCanvas
+                            anchors.fill: parent
+                            antialiasing: true
+
+                            Connections {
+                                target: chartCard
+                                function onChartDataChanged() { chartCanvas.requestPaint() }
+                            }
+
+                            onPaint: {
+                                const ctx = getContext("2d")
+                                ctx.reset()
+
+                                const w = width
+                                const h = height
+                                const data = chartCard.chartData
+                                const n = data.length
+                                if (n < 2) return
+
+                                const padBottom = 20
+                                const padTop = 10
+                                const plotH = h - padTop - padBottom
+                                const stepX = w / (n - 1)
+                                const max = chartCard.maxMinutes
+
+                                const pts = []
+                                for (let i = 0; i < n; i++) {
+                                    const v = Number(data[i].minutes || 0)
+                                    const x = i * stepX
+                                    const ratio = Math.max(0, Math.min(1, v / max))
+                                    const y = h - padBottom - (plotH * ratio)
+                                    pts.push({ x: x, y: y })
+                                }
+
+                                // Заливка полупрозрачным градиентом Breeze
+                                ctx.beginPath()
+                                ctx.moveTo(pts[0].x, pts[0].y)
+                                for (let i = 1; i < n; i++) {
+                                    const p0 = pts[i - 1]
+                                    const p1 = pts[i]
+                                    const cx = (p0.x + p1.x) / 2
+                                    ctx.bezierCurveTo(cx, p0.y, cx, p1.y, p1.x, p1.y)
+                                }
+                                ctx.lineTo(w, h - padBottom)
+                                ctx.lineTo(0, h - padBottom)
+                                ctx.closePath()
+
+                                const grad = ctx.createLinearGradient(0, padTop, 0, h - padBottom)
+                                const hl = Kirigami.Theme.highlightColor
+                                grad.addColorStop(0, Qt.rgba(hl.r, hl.g, hl.b, 0.35))
+                                grad.addColorStop(1, Qt.rgba(hl.r, hl.g, hl.b, 0.02))
+                                ctx.fillStyle = grad
+                                ctx.fill()
+
+                                // Линия
+                                ctx.beginPath()
+                                ctx.moveTo(pts[0].x, pts[0].y)
+                                for (let i = 1; i < n; i++) {
+                                    const p0 = pts[i - 1]
+                                    const p1 = pts[i]
+                                    const cx = (p0.x + p1.x) / 2
+                                    ctx.bezierCurveTo(cx, p0.y, cx, p1.y, p1.x, p1.y)
+                                }
+                                ctx.strokeStyle = Kirigami.Theme.highlightColor
+                                ctx.lineWidth = 2.5
+                                ctx.lineCap = "round"
+                                ctx.lineJoin = "round"
+                                ctx.stroke()
+
+                                // Горизонтальная базовая линия
+                                ctx.beginPath()
+                                ctx.moveTo(0, h - padBottom)
+                                ctx.lineTo(w, h - padBottom)
+                                ctx.strokeStyle = Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
+                                ctx.lineWidth = 1
+                                ctx.stroke()
+                            }
+                        }
+                    }
+                }
+            }
+
+            // =================================================================
+            // ТОП ТРЕКОВ И ТОП ИСПОЛНИТЕЛЕЙ
+            // Desktop: 2 колонки рядом, Mobile: 1 колонка друг под другом
+            // =================================================================
+            GridLayout {
+                Layout.fillWidth: true
+                columns: root.isMobile ? 1 : 2
+                rowSpacing: 24
+                columnSpacing: 20
+
+                // БЛОК 1: ТОП ТРЕКОВ
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+
+                    Kirigami.Heading {
+                        level: 3
+                        text: qsTr("Топ треков")
+                        font.bold: true
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        radius: Kirigami.Units.cornerRadius
+                        color: Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.65)
+                        border.width: 1
+                        border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
+                        implicitHeight: topTracksCol.implicitHeight + 16
+
+                        ColumnLayout {
+                            id: topTracksCol
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.margins: 8
+                            spacing: 4
+
+                            readonly property var tracksList: root.stats ? root.stats.topTracks(20) : []
 
                             Repeater {
-                                id: dateRepeater
-                                model: chartCard.chartData
+                                model: topTracksCol.tracksList
 
-                                delegate: Item {
-                                    required property int index
+                                delegate: Rectangle {
+                                    id: trackRowItem
                                     required property var modelData
+                                    required property int index
 
-                                    readonly property string label:
-                                        String(modelData.label || "")
+                                    Layout.fillWidth: true
+                                    height: 52
+                                    radius: 6
+                                    color: trackMouse.containsMouse
+                                        ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.12)
+                                        : "transparent"
 
-                                    width: dateWidth()
-                                    height: parent.height
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 8
+                                        anchors.rightMargin: 12
+                                        spacing: 10
 
-                                    readonly property int total: dateRepeater.count
+                                        QQC2.Label {
+                                            Layout.preferredWidth: 24
+                                            text: String(trackRowItem.index + 1)
+                                            font.bold: trackRowItem.index < 3
+                                            font.pixelSize: 13
+                                            color: trackRowItem.index < 3 ? Kirigami.Theme.highlightColor : Kirigami.Theme.disabledTextColor
+                                            horizontalAlignment: Text.AlignRight
+                                        }
 
-                                    function dateWidth() {
-                                        const n = dateRepeater.count
-                                        if (n <= 0) return 0
-                                        return (parent.width - 2 * (n - 1)) / n
+                                        Rectangle {
+                                            Layout.preferredWidth: 40
+                                            Layout.preferredHeight: 40
+                                            radius: 6
+                                            color: AppTheme.panelSecondary
+                                            clip: true
+
+                                            Image {
+                                                anchors.fill: parent
+                                                source: trackRowItem.modelData.coverUri
+                                                    ? ("image://yandex/" + String(trackRowItem.modelData.coverUri).replace(/%%/g, "400x400"))
+                                                    : ""
+                                                fillMode: Image.PreserveAspectCrop
+                                                asynchronous: true
+                                                cache: true
+                                                visible: status === Image.Ready
+                                            }
+
+                                            Kirigami.Icon {
+                                                anchors.centerIn: parent
+                                                width: 22
+                                                height: 22
+                                                source: "media-default-track"
+                                                color: Kirigami.Theme.disabledTextColor
+                                            }
+                                        }
+
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 1
+
+                                            QQC2.Label {
+                                                Layout.fillWidth: true
+                                                text: String(trackRowItem.modelData.title || qsTr("Без названия"))
+                                                font.bold: true
+                                                font.pixelSize: 13
+                                                elide: Text.ElideRight
+                                                color: trackMouse.containsMouse ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
+                                            }
+
+                                            QQC2.Label {
+                                                Layout.fillWidth: true
+                                                text: String(trackRowItem.modelData.artist || qsTr("Неизвестный исполнитель"))
+                                                font.pixelSize: 11
+                                                color: Kirigami.Theme.disabledTextColor
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            Layout.preferredHeight: 24
+                                            Layout.preferredWidth: playsLabel.implicitWidth + 14
+                                            radius: 12
+                                            color: Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.15)
+
+                                            QQC2.Label {
+                                                id: playsLabel
+                                                anchors.centerIn: parent
+                                                text: qsTr("%1×").arg(trackRowItem.modelData.plays || 0)
+                                                font.bold: true
+                                                font.pixelSize: 11
+                                                color: Kirigami.Theme.highlightColor
+                                            }
+                                        }
                                     }
 
-                                    Label {
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        anchors.verticalCenter: parent.verticalCenter
-
-                                        text: index % 5 === 0 ? label : ""
-                                        color: AppTheme.textMuted
-                                        font.pixelSize: 9
+                                    MouseArea {
+                                        id: trackMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            if (root.controller) {
+                                                root.controller.playStatsTrack(trackRowItem.index)
+                                            }
+                                        }
                                     }
                                 }
                             }
+
+                            QQC2.Label {
+                                Layout.fillWidth: true
+                                text: qsTr("История прослушиваний пуста")
+                                color: Kirigami.Theme.disabledTextColor
+                                font.pixelSize: 13
+                                horizontalAlignment: Text.AlignHCenter
+                                visible: topTracksCol.tracksList.length === 0
+                                Layout.topMargin: 20
+                                Layout.bottomMargin: 20
+                            }
                         }
                     }
-
-                    Label {
-                        anchors.centerIn: parent
-
-                        text: "Нет данных за этот период"
-                        color: AppTheme.textSecondary
-                        font.pixelSize: 13
-
-                        visible: !chartCard.hasData
-                    }
                 }
-            }
 
-            Row {
-                width: parent.width
-                spacing: 16
-
-                Column {
-                    width: parent.width / 2 - parent.spacing / 2
+                // БЛОК 2: ТОП ИСПОЛНИТЕЛЕЙ
+                ColumnLayout {
+                    Layout.fillWidth: true
                     spacing: 12
 
-                    Label {
-                        width: parent.width
-
-                        text: "Топ треков"
-                        color: AppTheme.textPrimary
-                        font.pixelSize: 20
+                    Kirigami.Heading {
+                        level: 3
+                        text: qsTr("Топ исполнителей")
                         font.bold: true
                     }
 
                     Rectangle {
-                        width: parent.width
+                        Layout.fillWidth: true
+                        radius: Kirigami.Units.cornerRadius
+                        color: Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.65)
+                        border.width: 1
+                        border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
+                        implicitHeight: topArtistsCol.implicitHeight + 16
 
-                    height: root.stats && root.stats.topTracks(20).length > 0
-                        ? Math.min(root.stats.topTracks(20).length * 56 + 20, 10 * 56 + 20)
-                        : 100
+                        ColumnLayout {
+                            id: topArtistsCol
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.margins: 8
+                            spacing: 4
 
-                    radius: 12
-                    color: AppTheme.panel
-                    border.width: 1
-                    border.color: AppTheme.borderSubtle
+                            readonly property var artistsList: root.stats ? root.stats.topArtists(20) : []
 
-                    ListView {
-                        id: topTracksView
+                            Repeater {
+                                model: topArtistsCol.artistsList
 
-                        anchors.fill: parent
-                        anchors.margins: 10
+                                delegate: Rectangle {
+                                    id: artistRowItem
+                                    required property var modelData
+                                    required property int index
 
-                        spacing: 6
-                        clip: true
-
-                        interactive: topTracksView.count > 8
-                        boundsBehavior: Flickable.StopAtBounds
-
-                        model: {
-                            root.stats
-                            AppTheme.dark
-                            return root.stats ? root.stats.topTracks(20) : []
-                        }
-
-                        delegate: Item {
-                            required property int index
-                            required property string id
-                            required property string title
-                            required property string artist
-                            required property string coverUri
-                            required property int plays
-
-                            width: topTracksView.width
-                            height: 50
-
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: 8
-                                color: rowArea.containsMouse
-                                    ? AppTheme.panelActive
-                                    : "transparent"
-
-                                Behavior on color {
-                                    ColorAnimation { duration: 120 }
-                                }
-                            }
-
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 9
-                                anchors.rightMargin: 9
-
-                                spacing: 11
-
-                                Label {
-                                    Layout.preferredWidth: 20
-                                    Layout.alignment: Qt.AlignVCenter
-
-                                    text: index + 1
-                                    color: index < 3 ? AppTheme.accent : AppTheme.textMuted
-                                    font.pixelSize: 12
-                                    font.bold: index < 3
-                                                                        horizontalAlignment: Text.AlignRight
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-
-                                Rectangle {
-                                    Layout.preferredWidth: 36
-                                    Layout.preferredHeight: 36
-                                    Layout.alignment: Qt.AlignVCenter
-
-                                    radius: 18
-                                    color: AppTheme.artworkPlaceholder
-                                    clip: true
-
-                                    Image {
-                                        id: rowCover
-                                        anchors.fill: parent
-                                        source: coverUri.length > 0
-                                            ? "image://yandex/circle/" + coverUri
-                                            : ""
-                                        sourceSize: Qt.size(72, 72)
-                                        fillMode: Image.PreserveAspectCrop
-                                        asynchronous: true
-                                        cache: true
-                                        smooth: true
-                                        visible: status === Image.Ready
-                                    }
-
-                                    Icon {
-                                        anchors.centerIn: parent
-                                        glyph: "note"
-                                        color: AppTheme.textMuted
-                                        size: 16
-                                        strokeWidth: 1.6
-                                        visible: rowCover.status !== Image.Ready
-                                    }
-                                }
-
-                                ColumnLayout {
                                     Layout.fillWidth: true
-                                    Layout.alignment: Qt.AlignVCenter
+                                    height: 52
+                                    radius: 6
+                                    color: artistMouse.containsMouse
+                                        ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.12)
+                                        : "transparent"
 
-                                    spacing: 3
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 8
+                                        anchors.rightMargin: 12
+                                        spacing: 10
 
-                                    Label {
-                                        Layout.fillWidth: true
-                                        text: title
-                                        color: AppTheme.textPrimary
-                                        font.pixelSize: 13
-                                        elide: Text.ElideRight
-                                        maximumLineCount: 1
+                                        QQC2.Label {
+                                            Layout.preferredWidth: 24
+                                            text: String(artistRowItem.index + 1)
+                                            font.bold: artistRowItem.index < 3
+                                            font.pixelSize: 13
+                                            color: artistRowItem.index < 3 ? Kirigami.Theme.highlightColor : Kirigami.Theme.disabledTextColor
+                                            horizontalAlignment: Text.AlignRight
+                                        }
+
+                                        Rectangle {
+                                            Layout.preferredWidth: 40
+                                            Layout.preferredHeight: 40
+                                            radius: 20
+                                            color: AppTheme.panelSecondary
+                                            clip: true
+
+                                            Kirigami.Icon {
+                                                anchors.centerIn: parent
+                                                width: 24
+                                                height: 24
+                                                source: "view-media-artist"
+                                                color: Kirigami.Theme.disabledTextColor
+                                            }
+                                        }
+
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 1
+
+                                            QQC2.Label {
+                                                Layout.fillWidth: true
+                                                text: String(artistRowItem.modelData.name || qsTr("Неизвестный исполнитель"))
+                                                font.bold: true
+                                                font.pixelSize: 13
+                                                elide: Text.ElideRight
+                                                color: artistMouse.containsMouse ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
+                                            }
+
+                                            QQC2.Label {
+                                                Layout.fillWidth: true
+                                                text: qsTr("Исполнитель")
+                                                font.pixelSize: 11
+                                                color: Kirigami.Theme.disabledTextColor
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            Layout.preferredHeight: 24
+                                            Layout.preferredWidth: artistPlaysLabel.implicitWidth + 14
+                                            radius: 12
+                                            color: Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.15)
+
+                                            QQC2.Label {
+                                                id: artistPlaysLabel
+                                                anchors.centerIn: parent
+                                                text: qsTr("%1×").arg(artistRowItem.modelData.plays || 0)
+                                                font.bold: true
+                                                font.pixelSize: 11
+                                                color: Kirigami.Theme.highlightColor
+                                            }
+                                        }
                                     }
 
-                                    Label {
-                                        Layout.fillWidth: true
-                                        text: artist
-                                        color: AppTheme.textSecondary
-                                        font.pixelSize: 11
-                                        elide: Text.ElideRight
-                                        maximumLineCount: 1
+                                    MouseArea {
+                                        id: artistMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            if (root.controller && artistRowItem.modelData.id) {
+                                                root.controller.loadArtist(artistRowItem.modelData.id)
+                                            }
+                                        }
                                     }
-                                }
-
-                                Label {
-                                    Layout.alignment: Qt.AlignVCenter
-
-                                    text: plays >= 100 ? "100+" : plays + "×"
-                                    color: AppTheme.textMuted
-                                    font.pixelSize: 11
-                                                                        verticalAlignment: Text.AlignVCenter
                                 }
                             }
 
-                            MouseArea {
-                                id: rowArea
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
+                            QQC2.Label {
+                                Layout.fillWidth: true
+                                text: qsTr("История исполнителей пуста")
+                                color: Kirigami.Theme.disabledTextColor
+                                font.pixelSize: 13
+                                horizontalAlignment: Text.AlignHCenter
+                                visible: topArtistsCol.artistsList.length === 0
+                                Layout.topMargin: 20
+                                Layout.bottomMargin: 20
                             }
                         }
-                    }
-
-                    Label {
-                        anchors.centerIn: parent
-
-                        text: "Нет данных — послушайте несколько треков"
-                        color: AppTheme.textSecondary
-                        font.pixelSize: 13
-
-                        visible: root.stats === null ||
-                            root.stats.topTracks(20).length === 0
                     }
                 }
             }
 
-            Column {
-                    width: parent.width / 2 - parent.spacing / 2
-                    spacing: 12
-
-                    Label {
-                        width: parent.width
-
-                        text: "Топ исполнителей"
-                        color: AppTheme.textPrimary
-                        font.pixelSize: 20
-                        font.bold: true
-                    }
-
-                    Rectangle {
-                    width: parent.width
-
-                    height: root.stats && root.stats.topArtists(20).length > 0
-                        ? Math.min(root.stats.topArtists(20).length * 56 + 20, 10 * 56 + 20)
-                        : 100
-
-                    radius: 12
-                    color: AppTheme.panel
-                    border.width: 1
-                    border.color: AppTheme.borderSubtle
-
-                    ListView {
-                        id: topArtistsView
-
-                        anchors.fill: parent
-                        anchors.margins: 10
-
-                        spacing: 6
-                        clip: true
-
-                        interactive: topArtistsView.count > 8
-                        boundsBehavior: Flickable.StopAtBounds
-
-                        model: {
-                            root.stats
-                            AppTheme.dark
-                            return root.stats ? root.stats.topArtists(20) : []
-                        }
-
-                        delegate: Item {
-                            required property int index
-                            required property string id
-                            required property string name
-                            required property string coverUri
-                            required property int plays
-
-                            width: topArtistsView.width
-                            height: 50
-
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: 8
-                                color: artistRowArea.containsMouse
-                                    ? AppTheme.panelActive
-                                    : "transparent"
-
-                                Behavior on color {
-                                    ColorAnimation { duration: 120 }
-                                }
-                            }
-
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 9
-                                anchors.rightMargin: 9
-
-                                spacing: 11
-
-                                Label {
-                                    Layout.preferredWidth: 20
-                                    Layout.alignment: Qt.AlignVCenter
-
-                                    text: index + 1
-                                    color: index < 3 ? AppTheme.accent : AppTheme.textMuted
-                                    font.pixelSize: 12
-                                    font.bold: index < 3
-                                                                        horizontalAlignment: Text.AlignRight
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-
-                                Rectangle {
-                                    Layout.preferredWidth: 36
-                                    Layout.preferredHeight: 36
-                                    Layout.alignment: Qt.AlignVCenter
-
-                                    radius: 18
-                                    color: AppTheme.artworkPlaceholder
-                                    clip: true
-
-                                    Image {
-                                        id: artistAvatar
-                                        anchors.fill: parent
-                                        source: coverUri.length > 0
-                                            ? "image://yandex/circle/" + coverUri
-                                            : ""
-                                        sourceSize: Qt.size(72, 72)
-                                        fillMode: Image.PreserveAspectCrop
-                                        asynchronous: true
-                                        cache: true
-                                        smooth: true
-                                        visible: status === Image.Ready
-                                    }
-
-                                    Icon {
-                                        anchors.centerIn: parent
-                                        glyph: "artist"
-                                        color: AppTheme.textMuted
-                                        size: 16
-                                        strokeWidth: 1.6
-                                        visible: artistAvatar.status !== Image.Ready
-                                    }
-                                }
-
-                                Label {
-                                    Layout.fillWidth: true
-                                    Layout.alignment: Qt.AlignVCenter
-
-                                    text: name
-                                    color: AppTheme.textPrimary
-                                    font.pixelSize: 13
-                                    elide: Text.ElideRight
-                                    maximumLineCount: 1
-                                }
-
-                                Label {
-                                    Layout.alignment: Qt.AlignVCenter
-
-                                    text: plays >= 100 ? "100+" : plays + "×"
-                                    color: AppTheme.textMuted
-                                    font.pixelSize: 11
-                                                                        verticalAlignment: Text.AlignVCenter
-                                }
-                            }
-
-                            MouseArea {
-                                id: artistRowArea
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                            }
-                        }
-                    }
-
-                    Label {
-                        anchors.centerIn: parent
-
-                        text: "Нет данных — послушайте несколько треков"
-                        color: AppTheme.textSecondary
-                        font.pixelSize: 13
-
-                        visible: root.stats === null ||
-                            root.stats.topArtists(20).length === 0
-                    }
-                }
-            }
-            }
-
-            Item {
-                width: 1
-                height: 20
-            }
+            Item { Layout.preferredHeight: 32 }
         }
     }
 }

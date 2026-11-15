@@ -31,7 +31,7 @@ LINUXDEPLOY_APPIMAGE_URL="https://github.com/linuxdeploy/linuxdeploy-plugin-appi
 VERSION="$(sed -nE '/^project\(/,/^\)/s/.*VERSION[[:space:]]+([0-9.]+).*/\1/p' "${ROOT_DIR}/CMakeLists.txt" | head -1)"
 VERSION="${VERSION:-0.0.0}"
 
-APPIMAGE_NAME="YaMusic-${VERSION}-x86_64.AppImage"
+APPIMAGE_NAME="KYMusic-${VERSION}-x86_64.AppImage"
 
 log() { printf '\033[1;36m[appimage]\033[0m %s\n' "$*"; }
 
@@ -88,9 +88,9 @@ main() {
   rm -rf "${APPDIR}"
   run_tool "${LINUXDEPLOY}" \
     --appdir "${APPDIR}" \
-    --executable "${DIST_DIR}/bin/yamusic" \
-    --desktop-file "${DIST_DIR}/share/applications/YaMusic.desktop" \
-    --icon-file "${DIST_DIR}/share/icons/hicolor/scalable/apps/yamusic.svg" \
+    --executable "${DIST_DIR}/bin/kymusic" \
+    --desktop-file "${DIST_DIR}/share/applications/org.kde.kymusic.desktop" \
+    --icon-file "${DIST_DIR}/share/icons/hicolor/scalable/apps/kymusic.svg" \
     --plugin qt
 
   log "Building ${APPIMAGE_NAME}..."

@@ -52,11 +52,11 @@ const ReleaseInfo &UpdateChecker::availableRelease() const {
 
 QString UpdateChecker::expectedAssetName(const QString &version) {
 #if defined(Q_OS_MACOS) || defined(Q_OS_MAC)
-  return QStringLiteral("YaMusic-%1-macos-%2.dmg").arg(version, archSuffix());
+  return QStringLiteral("KYMusic-%1-macos-%2.dmg").arg(version, archSuffix());
 #elif defined(Q_OS_WIN)
-  return QStringLiteral("YaMusic-%1-windows-x64-portable.zip").arg(version);
+  return QStringLiteral("KYMusic-%1-windows-x64-portable.zip").arg(version);
 #else
-  return QStringLiteral("YaMusic-%1-x86_64.AppImage").arg(version);
+  return QStringLiteral("KYMusic-%1-x86_64.AppImage").arg(version);
 #endif
 }
 
@@ -103,7 +103,7 @@ void UpdateChecker::check() {
 
   QNetworkRequest request(url);
   request.setHeader(QNetworkRequest::UserAgentHeader,
-                    QStringLiteral("YaMusic/%1").arg(m_currentVersion));
+                    QStringLiteral("KYMusic/%1").arg(m_currentVersion));
   request.setRawHeader("Accept", "application/vnd.github+json");
 
   QNetworkReply *reply = m_network->get(request);

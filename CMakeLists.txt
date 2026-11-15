@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(
-        YaMusic
-        VERSION 0.16.0
+        KYMusic
+        VERSION 1.0.0
         LANGUAGES CXX
 )
 
@@ -26,14 +26,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # =============================================================
-# Qt
+# Qt & KDE Frameworks 6 (KF6)
 # =============================================================
 
 find_package(
         Qt6 6.9
         REQUIRED COMPONENTS
         Quick
+        QuickControls2
+        QuickEffects
         Gui
+        Widgets
         Network
         Multimedia
 )
@@ -47,6 +50,23 @@ if(UNIX AND NOT APPLE)
     )
 
 endif()
+
+# Подключение Extra CMake Modules (ECM), если доступны в системе
+find_package(ECM 6.0.0 QUIET NO_MODULE)
+if(ECM_FOUND)
+    list(PREPEND CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
+    include(KDEInstallDirs OPTIONAL)
+    include(KDECMakeSettings OPTIONAL)
+endif()
+
+# Поиск пакетов KDE Frameworks 6
+find_package(KF6Kirigami REQUIRED)
+find_package(KF6ColorScheme REQUIRED)
+find_package(KF6CoreAddons REQUIRED)
+find_package(KF6IconThemes REQUIRED)
+find_package(KF6StatusNotifierItem REQUIRED)
+find_package(KF6XmlGui REQUIRED)
+find_package(KF6QQC2DesktopStyle QUIET)
 
 # Каталог модулей CMake (включая FindTagLib.cmake) — объявляем до
 # find_package(TagLib), чтобы модуль был найден по имени.
@@ -91,6 +111,14 @@ set(YAMUSIC_ICON_ICO
 
 set(YAMUSIC_ICON_SVG
         "${YAMUSIC_RESOURCES_ROOT}/YaMusic.svg"
+)
+
+set(KYMUSIC_ICON_SVG
+        "${YAMUSIC_RESOURCES_ROOT}/kymusic.svg"
+)
+
+set(KYMUSIC_TRAY_ICON_SVG
+        "${YAMUSIC_RESOURCES_ROOT}/kymusic-tray-symbolic.svg"
 )
 
 # =============================================================
@@ -163,6 +191,8 @@ set(
         src/Core/SearchController.cpp
         src/Core/AuthController.cpp
         src/Core/ThemeController.cpp
+        src/Core/KdeTrayController.cpp
+        src/Core/KdeMenuManager.cpp
         src/Core/PlaybackSettingsController.cpp
         src/Core/PreloadController.cpp
         src/Core/UpdateController.cpp
@@ -412,25 +442,25 @@ set(
         "${YAMUSIC_ROOT}/Main.qml"
 
         # Components
+        "${YAMUSIC_QML_ROOT}/Components/AmbientGlow.qml"
         "${YAMUSIC_QML_ROOT}/Components/SearchBar.qml"
         "${YAMUSIC_QML_ROOT}/Components/Sidebar.qml"
         "${YAMUSIC_QML_ROOT}/Components/StatusBar.qml"
         "${YAMUSIC_QML_ROOT}/Components/NowPlayingBar.qml"
         "${YAMUSIC_QML_ROOT}/Components/EntityLink.qml"
         "${YAMUSIC_QML_ROOT}/Components/ArtistLinks.qml"
-        "${YAMUSIC_QML_ROOT}/Components/ExpandedNowPlaying.qml"
         "${YAMUSIC_QML_ROOT}/Components/LyricsView.qml"
         "${YAMUSIC_QML_ROOT}/Components/TrackRow.qml"
         "${YAMUSIC_QML_ROOT}/Components/TrackContextMenu.qml"
         "${YAMUSIC_QML_ROOT}/Components/Badge.qml"
         "${YAMUSIC_QML_ROOT}/Components/Icon.qml"
         "${YAMUSIC_QML_ROOT}/Components/PlayerTip.qml"
+        "${YAMUSIC_QML_ROOT}/Components/KdeMediaCard.qml"
         "${YAMUSIC_QML_ROOT}/Components/PlaylistCard.qml"
         "${YAMUSIC_QML_ROOT}/Components/PlaylistPicker.qml"
         "${YAMUSIC_QML_ROOT}/Components/UpdateDialog.qml"
         "${YAMUSIC_QML_ROOT}/Components/CrashReportsDialog.qml"
         "${YAMUSIC_QML_ROOT}/Components/MiniPlayer.qml"
-        "${YAMUSIC_QML_ROOT}/Components/PlayerWindow.qml"
 
         # Pages
         "${YAMUSIC_QML_ROOT}/Pages/ReleasesPage.qml"
@@ -440,6 +470,7 @@ set(
         "${YAMUSIC_QML_ROOT}/Pages/SearchPage.qml"
         "${YAMUSIC_QML_ROOT}/Pages/MyWavePage.qml"
         "${YAMUSIC_QML_ROOT}/Pages/LibraryPage.qml"
+        "${YAMUSIC_QML_ROOT}/Pages/LikedTracksPage.qml"
         "${YAMUSIC_QML_ROOT}/Pages/AlbumPage.qml"
         "${YAMUSIC_QML_ROOT}/Pages/ArtistPage.qml"
         "${YAMUSIC_QML_ROOT}/Pages/PlaylistPage.qml"
@@ -508,7 +539,7 @@ set_source_files_properties(
 )
 
 # =============================================================
-# CSV resource
+# CSV & Icon resources
 # =============================================================
 
 set(
@@ -521,6 +552,38 @@ set_source_files_properties(
         PROPERTIES
         QT_RESOURCE_ALIAS
         "genre_playlists.csv"
+)
+
+set_source_files_properties(
+        "${KYMUSIC_ICON_SVG}"
+        PROPERTIES
+        QT_RESOURCE_ALIAS
+        "kymusic.svg"
+)
+
+set_source_files_properties(
+        "${KYMUSIC_TRAY_ICON_SVG}"
+        PROPERTIES
+        QT_RESOURCE_ALIAS
+        "kymusic-tray-symbolic.svg"
+)
+
+set_source_files_properties(
+        "${YAMUSIC_ICON_SVG}"
+        PROPERTIES
+        QT_RESOURCE_ALIAS
+        "YaMusic.svg"
+)
+
+qt_add_resources(
+        appYaMusic
+        "kymusic_icons"
+        PREFIX
+        "/"
+        FILES
+        "${KYMUSIC_ICON_SVG}"
+        "${KYMUSIC_TRAY_ICON_SVG}"
+        "${YAMUSIC_ICON_SVG}"
 )
 
 # =============================================================
@@ -541,6 +604,9 @@ qt_add_qml_module(
 
         RESOURCES
         "${YAMUSIC_GENRE_PLAYLISTS_CSV}"
+        "${KYMUSIC_ICON_SVG}"
+        "${KYMUSIC_TRAY_ICON_SVG}"
+        "${YAMUSIC_ICON_SVG}"
 
         QML_FILES
         ${YAMUSIC_QML_FILES}
@@ -554,14 +620,14 @@ if(UNIX AND NOT APPLE)
 
     set(
             YAMUSIC_OUTPUT_NAME
-            "yamusic"
+            "kymusic"
     )
 
 else()
 
     set(
             YAMUSIC_OUTPUT_NAME
-            "YaMusic"
+            "kymusic"
     )
 
 endif()
@@ -581,7 +647,7 @@ set_target_properties(
         TRUE
 
         MACOSX_BUNDLE_BUNDLE_NAME
-        "YaMusic"
+        "KYMusic"
 
         MACOSX_BUNDLE_BUNDLE_VERSION
         "${PROJECT_VERSION}"
@@ -590,7 +656,7 @@ set_target_properties(
         "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}"
 
         MACOSX_BUNDLE_GUI_IDENTIFIER
-        "ru.yandex.yamusic"
+        "org.kde.kymusic"
 
         WIN32_EXECUTABLE
         TRUE
@@ -621,9 +687,19 @@ target_link_libraries(
         PRIVATE
 
         Qt6::Quick
+        Qt6::QuickControls2
+        Qt6::QuickEffects
         Qt6::Gui
+        Qt6::Widgets
         Qt6::Network
         Qt6::Multimedia
+
+        KF6::Kirigami
+        KF6::ColorScheme
+        KF6::CoreAddons
+        KF6::IconThemes
+        KF6::StatusNotifierItem
+        KF6::XmlGui
 
         TagLib::TagLib
 )
@@ -722,7 +798,7 @@ if(UNIX AND NOT APPLE)
 
     set(
             YAMUSIC_DESKTOP_FILE
-            "${CMAKE_CURRENT_BINARY_DIR}/YaMusic.desktop"
+            "${CMAKE_CURRENT_BINARY_DIR}/org.kde.kymusic.desktop"
     )
 
     file(
@@ -731,12 +807,13 @@ if(UNIX AND NOT APPLE)
 
             "[Desktop Entry]\n"
             "Type=Application\n"
-            "Name=YaMusic\n"
-            "Comment=Yandex Music desktop client\n"
-            "Exec=yamusic\n"
-            "Icon=yamusic\n"
+            "Name=KYMusic\n"
+            "GenericName=Music Player\n"
+            "Comment=Native KDE music player client for Yandex Music\n"
+            "Exec=kymusic\n"
+            "Icon=kymusic\n"
             "Terminal=false\n"
-            "Categories=AudioVideo;Audio;Music;\n"
+            "Categories=Qt;KDE;AudioVideo;Audio;Player;Music;\n"
     )
 
     install(
@@ -751,17 +828,32 @@ if(UNIX AND NOT APPLE)
     # Linux icon
     # =========================================================
 
-    if(EXISTS "${YAMUSIC_ICON_SVG}")
+    if(EXISTS "${KYMUSIC_ICON_SVG}")
 
         install(
                 FILES
-                "${YAMUSIC_ICON_SVG}"
+                "${KYMUSIC_ICON_SVG}"
 
                 DESTINATION
                 share/icons/hicolor/scalable/apps
 
                 RENAME
-                yamusic.svg
+                kymusic.svg
+        )
+
+    endif()
+
+    if(EXISTS "${KYMUSIC_TRAY_ICON_SVG}")
+
+        install(
+                FILES
+                "${KYMUSIC_TRAY_ICON_SVG}"
+
+                DESTINATION
+                share/icons/hicolor/scalable/status
+
+                RENAME
+                kymusic-tray-symbolic.svg
         )
 
     endif()
@@ -807,7 +899,7 @@ if(UNIX AND NOT APPLE)
       "set(__QT_DEPLOY_I18N_CATALOGS \"qtbase;qtdeclarative;qtmultimedia\")\n"
       "qt6_deploy_qml_imports(TARGET appYaMusic PLUGINS_FOUND plugins_found)\n"
       "qt6_deploy_runtime_dependencies(\n"
-      "    EXECUTABLE \"${CMAKE_CURRENT_BINARY_DIR}/yamusic\"\n"
+      "    EXECUTABLE \"${CMAKE_CURRENT_BINARY_DIR}/kymusic\"\n"
       "    ADDITIONAL_MODULES \${plugins_found}\n"
       "    GENERATE_QT_CONF\n"
       "    NO_TRANSLATIONS\n"
@@ -925,4 +1017,56 @@ target_link_libraries(
 add_test(
         NAME crash_report
         COMMAND tst_crash_report
+)
+
+qt_add_executable(
+        tst_playback_repeat
+        tests/tst_playback_repeat.cpp
+        src/Queue/QueueService.cpp
+        src/Models/Track.cpp
+)
+
+set_target_properties(
+        tst_playback_repeat
+        PROPERTIES
+        MACOSX_BUNDLE FALSE
+        WIN32_EXECUTABLE FALSE
+)
+
+target_link_libraries(
+        tst_playback_repeat
+        PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+        NAME playback_repeat
+        COMMAND tst_playback_repeat
+)
+
+qt_add_executable(
+        tst_playlist_cover
+        tests/tst_playlist_cover.cpp
+        src/Yandex/Parsers.cpp
+        src/Yandex/Personal/LibraryPlaylistsModel.cpp
+)
+
+set_target_properties(
+        tst_playlist_cover
+        PROPERTIES
+        MACOSX_BUNDLE FALSE
+        WIN32_EXECUTABLE FALSE
+)
+
+target_link_libraries(
+        tst_playlist_cover
+        PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+add_test(
+        NAME playlist_cover
+        COMMAND tst_playlist_cover
 )

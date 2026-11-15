@@ -1,6 +1,9 @@
 import QtQuick
-import QtQuick.Controls.Basic
+import QtQuick.Controls
+import QtQuick.Layouts
+import org.kde.kirigami as Kirigami
 import YaMusic 1.0
+import "../Components"
 
 Item {
     id: root
@@ -128,11 +131,26 @@ Item {
         spacing: 26
 
         // ---- Приветствие ----
-        Label {
-            text: root.greeting()
-            color: AppTheme.textPrimary
-            font.pixelSize: 28
-            font.bold: true
+        RowLayout {
+            width: parent.width
+            Label {
+                Layout.fillWidth: true
+                text: root.greeting()
+                color: AppTheme.textPrimary
+                font.pixelSize: (typeof window !== "undefined" && window.isMobileMode) ? 22 : 28
+                font.bold: true
+                elide: Text.ElideRight
+            }
+
+            ToolButton {
+                visible: (typeof window !== "undefined" && window.isMobileMode)
+                icon.name: "application-menu"
+                onClicked: {
+                    if (typeof mainLayout !== "undefined") {
+                        mainLayout.openMenu(this)
+                    }
+                }
+            }
         }
 
         // ---- Кнопки-действия ----
@@ -230,62 +248,22 @@ Item {
         }
     }
 
-    component ActionButton: Rectangle {
+    component ActionButton: Button {
         id: actionButton
 
-        property string text
-        property string glyph
+        property string glyph: ""
         property bool emphasized: false
 
-        signal clicked()
-
-        height: 44
-        width: actionRow.implicitWidth + 32
-        radius: 12
-
-        color: actionMouseArea.containsMouse
-            ? AppTheme.panelHover
-            : (actionButton.emphasized ? AppTheme.accent : AppTheme.panel)
-
-        Behavior on color {
-            ColorAnimation { duration: 100 }
-        }
-
-        Row {
-            id: actionRow
-
-            anchors.centerIn: parent
-            spacing: 8
-
-            Icon {
-                anchors.verticalCenter: parent.verticalCenter
-                glyph: actionButton.glyph
-                color: actionButton.emphasized
-                    ? AppTheme.accentOn
-                    : AppTheme.textSecondary
-                size: 15
+        highlighted: emphasized
+        icon.name: {
+            switch (glyph) {
+                case "play": return "media-playback-start"
+                case "chart": return "view-media-recent"
+                case "playlist": return "view-media-playlist"
+                case "heartFilled": return "starred-symbolic"
+                case "search": return "edit-find"
+                default: return ""
             }
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-
-                text: actionButton.text
-                color: actionButton.emphasized
-                    ? AppTheme.accentOn
-                    : AppTheme.textPrimary
-                font.pixelSize: 14
-                font.weight: Font.Medium
-            }
-        }
-
-        MouseArea {
-            id: actionMouseArea
-
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-
-            onClicked: actionButton.clicked()
         }
     }
 
@@ -301,41 +279,35 @@ Item {
         signal cardClicked(int index, var item)
         signal playRequested(int index, var item)
 
-        readonly property int columns: Math.max(
-            1, Math.floor(gridSection.width / (gridSection.cardWidth + gridSection.cardSpacing)))
+        readonly property bool isMobile: (typeof window !== "undefined" && window.isMobileMode) || gridSection.width < 540
+
+        // Полностью адаптивное число колонок (2 на мобильных экранах, без лимита в 6 колонок на десктопе)
+        readonly property int columns: isMobile
+            ? 2
+            : Math.max(2, Math.floor((gridSection.width + gridSection.cardSpacing) / (gridSection.cardWidth + gridSection.cardSpacing)))
+
+        // Динамическая ширина карточки для равномерного заполнения всей рабочей области
+        readonly property int effectiveCardWidth: Math.floor(
+            (gridSection.width - (gridSection.columns - 1) * gridSection.cardSpacing) / gridSection.columns)
 
         readonly property int rowCount: Math.ceil(
-            (gridSection.model ? gridSection.model.length : 0) / gridSection.columns)
+            (gridSection.model ? gridSection.model.length : 0) / Math.max(1, gridSection.columns))
 
-        readonly property int cardHeight: gridSection.cardWidth + 52
+        readonly property int cardHeight: gridSection.roundArtwork ? 206 : (gridSection.effectiveCardWidth + 56)
 
         implicitHeight:
             listHeader.implicitHeight +
-            gridSection.rowCount * (gridSection.cardHeight + 22)
+            gridSection.rowCount * (gridSection.cardHeight + gridSection.cardSpacing) + 16
 
         Column {
+            width: gridSection.width
             spacing: 14
 
-            Label {
+            Kirigami.Heading {
                 id: listHeader
-
                 width: gridSection.width
-
+                level: 2
                 text: gridSection.title
-                color: AppTheme.textPrimary
-                font.pixelSize: 20
-                font.weight: Font.DemiBold
-            }
-
-            Rectangle {
-                width: 40
-                height: 3
-                radius: 1.5
-
-                gradient: Gradient {
-                    GradientStop { position: 0.0; color: AppTheme.accent }
-                    GradientStop { position: 1.0; color: AppTheme.mauveAccent }
-                }
             }
 
             Grid {
@@ -347,161 +319,19 @@ Item {
                 Repeater {
                     model: gridSection.model
 
-                    delegate: Item {
-                        property var item: modelData
+                    delegate: KdeMediaCard {
+                        cardWidth: gridSection.effectiveCardWidth
+                        cardHeight: gridSection.cardHeight
+                        roundArtwork: gridSection.roundArtwork
+                        title: String(modelData.title || modelData.name || "")
+                        subtitle: String(modelData.description || modelData.subtitle || "")
+                        coverUri: modelData.coverUri ? String(modelData.coverUri) : (modelData.coverUrl ? String(modelData.coverUrl) : "")
+                        backgroundColor: (modelData.color && String(modelData.color).length > 0)
+                            ? modelData.color
+                            : "transparent"
 
-                        width: gridSection.cardWidth
-                        height: gridSection.cardHeight
-
-                        Rectangle {
-                            id: artwork
-
-                            width: gridSection.cardWidth
-                            height: gridSection.cardWidth
-
-                            radius: gridSection.roundArtwork ? gridSection.cardWidth / 2 : 12
-                            color: modelData.color && String(modelData.color).length > 0
-                                ? modelData.color
-                                : (gridSection.roundArtwork ? AppTheme.panelSecondary : AppTheme.panelSubtle)
-                            clip: true
-
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: parent.radius
-                                clip: true
-
-                                // Заливка фона цветом волны, чтобы под обложкой
-                                // не просвечивал белый/нейтральный фон.
-                                color: modelData.color && String(modelData.color).length > 0
-                                    ? modelData.color
-                                    : "transparent"
-
-                                scale: cardMouse.containsMouse ? 1.02 : 1.0
-
-                                Behavior on scale {
-                                    NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
-                                }
-
-                                Image {
-                                    id: coverImage
-
-                                    anchors.fill: parent
-
-                                    source: modelData.coverUri && String(modelData.coverUri).length > 0
-                                        ? "image://yandex/" + (gridSection.roundArtwork ? "circle/" : "") + String(modelData.coverUri)
-                                        : ""
-
-                                    sourceSize: Qt.size(artwork.width * 2, artwork.height * 2)
-                                    fillMode: Image.PreserveAspectCrop
-                                    asynchronous: true
-                                    cache: true
-                                    smooth: true
-
-                                    visible: status === Image.Ready
-                                }
-
-                                Label {
-                                    anchors.centerIn: parent
-
-                                    text: gridSection.roundArtwork ? "〰" : "♪"
-                                    color: AppTheme.textSecondary
-                                    font.pixelSize: gridSection.roundArtwork ? 26 : 30
-
-                                    visible: coverImage.status !== Image.Ready
-                                }
-
-                                MouseArea {
-                                    id: cardMouse
-
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-
-                                    onClicked: gridSection.cardClicked(model.index, modelData)
-                                }
-
-                                // Плашка воспроизведения по наведению
-                                Rectangle {
-                                    id: playBadge
-
-                                    z: 2
-
-                                    anchors.right: parent.right
-                                    anchors.bottom: parent.bottom
-                                    anchors.margins: 8
-
-                                    width: 40
-                                    height: 40
-                                    radius: 20
-
-                                    color: AppTheme.accent
-
-                                    opacity: cardMouse.containsMouse ? 1.0 : 0.0
-                                    scale: cardMouse.containsMouse ? 1.0 : 0.6
-
-                                    Behavior on opacity {
-                                        NumberAnimation { duration: 120 }
-                                    }
-
-                                    Behavior on scale {
-                                        NumberAnimation { duration: 120; easing.type: Easing.OutBack }
-                                    }
-
-                                    Icon {
-                                        anchors.centerIn: parent
-                                        glyph: "play"
-                                        color: AppTheme.accentOn
-                                        size: 18
-                                    }
-
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        cursorShape: Qt.PointingHandCursor
-
-                                        onClicked: gridSection.playRequested(model.index, modelData)
-                                    }
-                                }
-                            }
-                        }
-
-                        Label {
-                            id: titleLabel
-
-                            anchors.top: artwork.bottom
-                            anchors.topMargin: 8
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-
-                            height: 18
-
-                            text: String(modelData.title || "")
-                            color: AppTheme.textPrimary
-                            font.pixelSize: 13
-                            font.weight: Font.Medium
-
-                            elide: Text.ElideRight
-                            maximumLineCount: 1
-                            clip: true
-                        }
-
-                        Label {
-                            anchors.top: titleLabel.bottom
-                            anchors.topMargin: 2
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-
-                            height: 16
-
-                            text: String(modelData.description || "")
-                            color: AppTheme.textMuted
-                            font.pixelSize: 11
-
-                            elide: Text.ElideRight
-                            maximumLineCount: 1
-                            clip: true
-
-                            visible: String(modelData.description || "").length > 0
-                        }
+                        onActivated: gridSection.cardClicked(index, modelData)
+                        onPlayRequested: gridSection.playRequested(index, modelData)
                     }
                 }
             }

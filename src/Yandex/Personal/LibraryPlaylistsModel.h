@@ -19,7 +19,8 @@ public:
     TitleRole,
     DescriptionRole,
     CoverUriRole,
-    TrackCountRole
+    TrackCountRole,
+    CoverUrlRole
   };
 
   Q_ENUM(Roles)
@@ -29,6 +30,8 @@ public:
   QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
   QHash<int, QByteArray> roleNames() const override;
   void setPlaylists(const QList<PersonalPlaylist> &playlists);
+  bool updateCoverUri(int kind, const QString &coverUri);
+  void removePlaylistByKind(int kind);
   void clear();
   int count() const;
   PersonalPlaylist playlistAt(int index) const;

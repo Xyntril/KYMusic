@@ -65,6 +65,23 @@ int TrackListModelBase::count() const {
   return m_tracks.size();
 }
 
+QVariantMap TrackListModelBase::get(int index) const {
+  if (index < 0 || index >= m_tracks.size()) return {};
+  const Track &t = m_tracks.at(index);
+  QVariantMap map;
+  map.insert(QStringLiteral("id"), t.id);
+  map.insert(QStringLiteral("trackId"), t.id);
+  map.insert(QStringLiteral("title"), t.title);
+  map.insert(QStringLiteral("artist"), t.artists.isEmpty() ? QString() : t.artists.first().name);
+  map.insert(QStringLiteral("artistId"), t.artists.isEmpty() ? QString() : t.artists.first().id);
+  map.insert(QStringLiteral("album"), t.albums.isEmpty() ? QString() : t.albums.first().title);
+  map.insert(QStringLiteral("albumId"), t.albums.isEmpty() ? QString() : t.albums.first().id);
+  map.insert(QStringLiteral("coverUri"), t.coverUri);
+  map.insert(QStringLiteral("durationMs"), t.durationMs);
+  map.insert(QStringLiteral("liked"), t.liked);
+  return map;
+}
+
 int TrackListModelBase::sourceIndex(int index) const {
   if (index < 0 || index >= m_tracks.size()) return -1;
 

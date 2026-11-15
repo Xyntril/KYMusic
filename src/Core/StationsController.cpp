@@ -183,7 +183,6 @@ void StationsController::rebuildGroups(const QList<Station> &stations) {
 
   m_groups = groups;
   emit groupsChanged();
-  emit statusChanged(QStringLiteral("Станции: %1").arg(stations.size()));
 }
 
 void StationsController::loadStations() {
@@ -193,7 +192,6 @@ void StationsController::loadStations() {
 
   m_loading = true;
   emit loadingChanged();
-  emit statusChanged("Загрузка станций...");
   m_stationService->loadStations();
 }
 
@@ -304,6 +302,10 @@ void StationsController::tryAdvanceStation() {
 
   m_stationNeedsResume = false;
 
+  if (queue->repeatMode() == QueueService::RepeatOne) {
+    return;
+  }
+
   if (queue->hasNext()) {
     queue->next();
     const Track next = queue->currentTrack();
@@ -321,6 +323,11 @@ void StationsController::handleStationPlaylistExhausted() {
     return;
   }
 
+  QueueService *queue = m_playbackController->queueService();
+  if (queue != nullptr && queue->repeatMode() == QueueService::RepeatOne) {
+    return;
+  }
+
   if (m_stationLoading) {
     m_stationNeedsResume = true;
     return;
@@ -335,7 +342,6 @@ void StationsController::handleStationPlaylistExhausted() {
   m_stationNeedsResume = true;
   m_stationLoading = true;
   emit stationLoadingChanged();
-  emit statusChanged("Загрузка следующих треков станции...");
   m_stationService->loadMoreStationSession(m_queueTokens);
 }
 

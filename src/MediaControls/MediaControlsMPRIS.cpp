@@ -1,13 +1,16 @@
 #include "MediaControlsMPRIS.h"
 
+#include <QCoreApplication>
 #include <QDBusAbstractAdaptor>
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDBusObjectPath>
+#include <QRegularExpression>
 #include <QVariantMap>
 
 namespace {
-constexpr auto kServiceName = "org.mpris.MediaPlayer2.YaMusic";
+constexpr auto kServiceName = "org.mpris.MediaPlayer2.kymusic";
+constexpr auto kFallbackServiceName = "org.mpris.MediaPlayer2.YaMusic";
 constexpr auto kObjectPath = "/org/mpris/MediaPlayer2";
 
 QString playbackStatusToString(SystemMediaControls::PlaybackStatus status) {
@@ -48,13 +51,22 @@ public:
   void requestNext() { Q_EMIT m_owner->nextRequested(); }
   void requestPrevious() { Q_EMIT m_owner->previousRequested(); }
   void requestSeek(qint64 positionMs) { Q_EMIT m_owner->seekRequested(positionMs); }
+  void requestSetLoopStatus(const QString &loopStatus) {
+    Q_EMIT m_owner->setLoopStatusRequested(loopStatus);
+  }
+  void requestSetShuffle(bool shuffle) {
+    Q_EMIT m_owner->setShuffleRequested(shuffle);
+  }
+  void requestRaise() { Q_EMIT m_owner->raiseRequested(); }
+  void requestQuit() { Q_EMIT m_owner->quitRequested(); }
 
   void notifyAllChanged();
   void notifySeeked(qint64 positionMs);
 
 private:
   MediaControlsMPRIS *m_owner = nullptr;
-  qint64 m_lastSeekedMs = 0;
+  qint64 m_lastSeekedMs = -1;
+  QString m_registeredService;
 };
 
 // Адаптеры — по одному на D-Bus интерфейс.
@@ -72,19 +84,22 @@ class RootAdaptor : public QDBusAbstractAdaptor {
   Q_PROPERTY(QStringList SupportedMimeTypes READ supportedMimeTypes CONSTANT)
 
 public:
-  explicit RootAdaptor(Impl *parent) : QDBusAbstractAdaptor(parent) {}
+  explicit RootAdaptor(Impl *parent) : QDBusAbstractAdaptor(parent), m_impl(parent) {}
 
 public slots:
-  void Raise() {}
-  void Quit() {}
+  void Raise() { m_impl->requestRaise(); }
+  void Quit() { m_impl->requestQuit(); }
 
-  bool canQuit() const { return false; }
-  bool canRaise() const { return false; }
+  bool canQuit() const { return true; }
+  bool canRaise() const { return true; }
   bool hasTrackList() const { return false; }
-  QString identity() const { return QStringLiteral("YaMusic"); }
-  QString desktopEntry() const { return QStringLiteral("yamusic"); }
-  QStringList supportedUriSchemes() const { return {QStringLiteral("https")}; }
-  QStringList supportedMimeTypes() const { return {QStringLiteral("audio/mpeg")}; }
+  QString identity() const { return QStringLiteral("KYMusic"); }
+  QString desktopEntry() const { return QStringLiteral("kymusic"); }
+  QStringList supportedUriSchemes() const { return {QStringLiteral("https"), QStringLiteral("file")}; }
+  QStringList supportedMimeTypes() const { return {QStringLiteral("audio/mpeg"), QStringLiteral("audio/flac")}; }
+
+private:
+  Impl *m_impl = nullptr;
 };
 
 class PlayerAdaptor : public QDBusAbstractAdaptor {
@@ -92,12 +107,12 @@ class PlayerAdaptor : public QDBusAbstractAdaptor {
   Q_CLASSINFO("D-Bus Interface", "org.mpris.MediaPlayer2.Player")
 
   Q_PROPERTY(QString PlaybackStatus READ playbackStatus NOTIFY playbackStatusChanged)
-  Q_PROPERTY(QString LoopStatus READ loopStatus NOTIFY loopStatusChanged)
+  Q_PROPERTY(QString LoopStatus READ loopStatus WRITE setLoopStatus NOTIFY loopStatusChanged)
   Q_PROPERTY(double Rate READ rate CONSTANT)
-  Q_PROPERTY(bool Shuffle READ shuffle NOTIFY shuffleChanged)
+  Q_PROPERTY(bool Shuffle READ shuffle WRITE setShuffle NOTIFY shuffleChanged)
   Q_PROPERTY(QVariantMap Metadata READ metadata NOTIFY metadataChanged)
   Q_PROPERTY(double Volume READ volume WRITE setVolume NOTIFY volumeChanged)
-  Q_PROPERTY(qint64 Position READ position)
+  Q_PROPERTY(qlonglong Position READ position)
   Q_PROPERTY(double MinimumRate READ minimumRate CONSTANT)
   Q_PROPERTY(double MaximumRate READ maximumRate CONSTANT)
   Q_PROPERTY(bool CanGoNext READ canGoNext CONSTANT)
@@ -118,16 +133,25 @@ public slots:
   void Stop() { m_impl->requestPause(); }
   void Play() { m_impl->requestPlay(); }
 
-  void Seek(qint64 offsetMicroseconds) {
-    const qint64 targetUs = qMax<qint64>(0, m_impl->positionMs() * 1000 + offsetMicroseconds);
+  void Seek(qlonglong offsetMicroseconds) {
+    const qint64 currentPosUs = m_impl->positionMs() * 1000;
+    const qint64 targetUs = qMax<qint64>(0, currentPosUs + offsetMicroseconds);
     m_impl->requestSeek(targetUs / 1000);
   }
 
-  void SetPosition(const QDBusObjectPath &, qint64 posUs) {
+  void SetPosition(const QDBusObjectPath &, qlonglong posUs) {
     m_impl->requestSeek(qMax<qint64>(0, posUs) / 1000);
   }
 
   void OpenUri(const QString &) {}
+
+  void setLoopStatus(const QString &loopStatus) {
+    m_impl->requestSetLoopStatus(loopStatus);
+  }
+
+  void setShuffle(bool shuffle) {
+    m_impl->requestSetShuffle(shuffle);
+  }
 
   QString playbackStatus() const { return playbackStatusToString(m_impl->playbackStatus()); }
   QString loopStatus() const { return m_impl->loopStatus(); }
@@ -138,20 +162,54 @@ public slots:
     QVariantMap md;
     const auto &t = m_impl->metadata();
 
-    if (!t.trackId.isEmpty())
-      md[QStringLiteral("mpris:trackid")] = QVariant::fromValue(
-          QDBusObjectPath(QStringLiteral("/org/mpris/MediaPlayer2/YaMusic/%1").arg(t.trackId)));
-    if (!t.title.isEmpty()) md[QStringLiteral("xesam:title")] = t.title;
-    if (!t.artist.isEmpty()) md[QStringLiteral("xesam:artist")] = QStringList{t.artist};
-    if (!t.album.isEmpty()) md[QStringLiteral("xesam:album")] = t.album;
-    if (t.durationMs > 0) md[QStringLiteral("mpris:length")] = t.durationMs * 1000;
-    if (!t.coverUrl.isEmpty()) md[QStringLiteral("mpris:artUrl")] = t.coverUrl;
+    QString cleanId = t.trackId;
+    cleanId.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9_]")), QStringLiteral("_"));
+    if (cleanId.isEmpty()) {
+      cleanId = QStringLiteral("0");
+    }
+    md[QStringLiteral("mpris:trackid")] = QVariant::fromValue(
+        QDBusObjectPath(QStringLiteral("/org/kde/kymusic/track_%1").arg(cleanId)));
+
+    if (!t.title.isEmpty()) {
+      md[QStringLiteral("xesam:title")] = t.title;
+    } else {
+      md[QStringLiteral("xesam:title")] = QStringLiteral("KYMusic");
+    }
+
+    if (!t.artist.isEmpty()) {
+      md[QStringLiteral("xesam:artist")] = QStringList{t.artist};
+    } else {
+      md[QStringLiteral("xesam:artist")] = QStringList{QStringLiteral("KYMusic")};
+    }
+
+    if (!t.album.isEmpty()) {
+      md[QStringLiteral("xesam:album")] = t.album;
+    }
+
+    if (t.durationMs > 0) {
+      md[QStringLiteral("mpris:length")] = static_cast<qlonglong>(t.durationMs * 1000);
+    }
+
+    QString artUrl = t.coverUrl;
+    if (!artUrl.isEmpty()) {
+      if (!artUrl.startsWith(QLatin1String("http://")) &&
+          !artUrl.startsWith(QLatin1String("https://")) &&
+          !artUrl.startsWith(QLatin1String("file://"))) {
+        if (artUrl.startsWith(QLatin1String("//"))) {
+          artUrl = QStringLiteral("https:") + artUrl;
+        } else {
+          artUrl = QStringLiteral("https://") + artUrl;
+        }
+      }
+      md[QStringLiteral("mpris:artUrl")] = artUrl;
+    }
+
     return md;
   }
 
   double volume() const { return 1.0; }
   void setVolume(double) {}
-  qint64 position() const { return m_impl->positionMs() * 1000; }
+  qlonglong position() const { return static_cast<qlonglong>(m_impl->positionMs() * 1000); }
   double minimumRate() const { return 1.0; }
   double maximumRate() const { return 1.0; }
 
@@ -170,7 +228,9 @@ public slots:
     sendPropertiesChanged();
   }
 
-  void emitSeeked(qint64 positionMs) { Q_EMIT Seeked(positionMs * 1000); }
+  void emitSeeked(qint64 positionMs) {
+    Q_EMIT Seeked(static_cast<qlonglong>(positionMs * 1000));
+  }
 
   void sendPropertiesChanged() {
     QVariantMap changed;
@@ -178,6 +238,12 @@ public slots:
     changed.insert(QStringLiteral("LoopStatus"), loopStatus());
     changed.insert(QStringLiteral("Shuffle"), shuffle());
     changed.insert(QStringLiteral("Metadata"), metadata());
+    changed.insert(QStringLiteral("CanControl"), canControl());
+    changed.insert(QStringLiteral("CanPlay"), canPlay());
+    changed.insert(QStringLiteral("CanPause"), canPause());
+    changed.insert(QStringLiteral("CanGoNext"), canGoNext());
+    changed.insert(QStringLiteral("CanGoPrevious"), canGoPrevious());
+    changed.insert(QStringLiteral("CanSeek"), canSeek());
 
     QDBusMessage msg = QDBusMessage::createSignal(QStringLiteral("/org/mpris/MediaPlayer2"),
                                                   QStringLiteral("org.freedesktop.DBus.Properties"),
@@ -192,7 +258,7 @@ signals:
   void shuffleChanged();
   void metadataChanged();
   void volumeChanged();
-  void Seeked(qint64 positionMicroseconds);
+  void Seeked(qlonglong positionMicroseconds);
 
 private:
   Impl *m_impl = nullptr;
@@ -203,26 +269,38 @@ private:
 bool Impl::registerService() {
   QDBusConnection bus = QDBusConnection::sessionBus();
 
-  if (!bus.registerService(kServiceName)) {
-    qWarning("MPRIS: cannot register service %s", kServiceName);
-    return false;
+  QString chosenService = QString::fromLatin1(kServiceName);
+  if (!bus.registerService(chosenService)) {
+    chosenService = QString::fromLatin1(kFallbackServiceName);
+    if (!bus.registerService(chosenService)) {
+      chosenService = QStringLiteral("org.mpris.MediaPlayer2.kymusic.instance%1")
+                          .arg(QCoreApplication::applicationPid());
+      if (!bus.registerService(chosenService)) {
+        qWarning("MPRIS: cannot register service %s, %s or instance PID", kServiceName, kFallbackServiceName);
+        return false;
+      }
+    }
   }
+  m_registeredService = chosenService;
 
   new RootAdaptor(this);
   new PlayerAdaptor(this);
 
   if (!bus.registerObject(kObjectPath, this, QDBusConnection::ExportAdaptors)) {
     qWarning("MPRIS: cannot register object %s", kObjectPath);
-    bus.unregisterService(kServiceName);
+    bus.unregisterService(m_registeredService);
+    m_registeredService.clear();
     return false;
   }
   return true;
 }
 
 void Impl::unregisterService() {
+  if (m_registeredService.isEmpty()) return;
   QDBusConnection bus = QDBusConnection::sessionBus();
   bus.unregisterObject(kObjectPath);
-  bus.unregisterService(kServiceName);
+  bus.unregisterService(m_registeredService);
+  m_registeredService.clear();
 }
 
 void Impl::notifyAllChanged() {
@@ -231,9 +309,13 @@ void Impl::notifyAllChanged() {
 }
 
 void Impl::notifySeeked(qint64 positionMs) {
-  if (qAbs(positionMs - m_lastSeekedMs) < 1000) return;
+  // При перемотке в 0:00 (повтор или возврат к началу) отправляем всегда!
+  if (positionMs != 0 && m_lastSeekedMs >= 0 && qAbs(positionMs - m_lastSeekedMs) < 1000) return;
   auto *pa = findChild<PlayerAdaptor *>(QString(), Qt::FindDirectChildrenOnly);
-  if (pa) pa->emitSeeked(positionMs);
+  if (pa) {
+    pa->emitSeeked(positionMs);
+    pa->sendPropertiesChanged();
+  }
   m_lastSeekedMs = positionMs;
 }
 

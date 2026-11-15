@@ -6,28 +6,120 @@
 
 // TODO(YM-2243): парсить версии треков (version) и остальные поля альбомов.
 QString parseId(const QJsonObject &object) {
+  const qint64 realId = object.value("realId").toInteger();
+  if (realId > 0) return QString::number(realId);
+
   const QJsonValue idValue = object.value("id");
   if (idValue.isString()) {
-    const QString id = idValue.toString();
+    QString id = idValue.toString().trimmed();
+    if (id.contains(':')) {
+      id = id.section(':', 0, 0).trimmed();
+    }
     if (!id.isEmpty()) return id;
   }
   if (idValue.isDouble()) {
     const qint64 id = idValue.toInteger();
     if (id > 0) return QString::number(id);
   }
-  const qint64 realId = object.value("realId").toInteger();
-  if (realId > 0) return QString::number(realId);
   return {};
+}
+
+static QString formatCoverUri(QString uri) {
+  uri = uri.trimmed();
+  if (uri.isEmpty()) return {};
+
+  if (uri.contains(QLatin1String("%%"))) {
+    uri.replace(QLatin1String("%%"), QLatin1String("400x400"));
+  }
+  if (!uri.startsWith(QLatin1String("http://")) &&
+      !uri.startsWith(QLatin1String("https://")) &&
+      !uri.startsWith(QLatin1String("qrc:/")) &&
+      !uri.startsWith(QLatin1String("file:/"))) {
+    if (uri.startsWith(QLatin1String("//"))) {
+      uri = QStringLiteral("https:") + uri;
+    } else {
+      uri = QStringLiteral("https://") + uri;
+    }
+  }
+  return uri;
 }
 
 QString parseCoverUri(const QJsonObject &object) {
   QString uri = object.value("coverUri").toString();
-  if (!uri.isEmpty()) return uri;
+  if (!uri.isEmpty()) return formatCoverUri(uri);
 
   const QJsonObject cover = object.value("cover").toObject();
   uri = cover.value("uri").toString();
-  if (!uri.isEmpty()) return uri;
-  return object.value("ogImage").toString();
+  if (!uri.isEmpty()) return formatCoverUri(uri);
+
+  const QJsonArray itemsUri = cover.value("itemsUri").toArray();
+  for (const QJsonValue &item : itemsUri) {
+    const QString itemUri = item.toString().trimmed();
+    if (!itemUri.isEmpty()) {
+      return formatCoverUri(itemUri);
+    }
+  }
+
+  const QJsonArray directItemsUri = object.value("itemsUri").toArray();
+  for (const QJsonValue &item : directItemsUri) {
+    const QString itemUri = item.toString().trimmed();
+    if (!itemUri.isEmpty()) {
+      return formatCoverUri(itemUri);
+    }
+  }
+
+  uri = object.value("animatedCoverUri").toString();
+  if (!uri.isEmpty()) return formatCoverUri(uri);
+  uri = cover.value("animatedCoverUri").toString();
+  if (!uri.isEmpty()) return formatCoverUri(uri);
+
+  uri = object.value("ogImage").toString();
+  if (!uri.isEmpty()) return formatCoverUri(uri);
+  uri = cover.value("ogImage").toString();
+  if (!uri.isEmpty()) return formatCoverUri(uri);
+
+  const QJsonObject custom = cover.value("custom").toObject();
+  uri = custom.value("uri").toString();
+  if (!uri.isEmpty()) return formatCoverUri(uri);
+
+  uri = cover.value("dir").toString();
+  if (!uri.isEmpty()) return formatCoverUri(uri);
+
+  uri = cover.value("prefix").toString();
+  if (!uri.isEmpty()) return formatCoverUri(uri);
+
+  const QJsonArray albums = object.value("albums").toArray();
+  for (const QJsonValue &albumVal : albums) {
+    if (albumVal.isObject()) {
+      const QString albumUri = parseCoverUri(albumVal.toObject());
+      if (!albumUri.isEmpty()) {
+        return formatCoverUri(albumUri);
+      }
+    }
+  }
+
+  if (object.value("album").isObject()) {
+    const QString albumUri = parseCoverUri(object.value("album").toObject());
+    if (!albumUri.isEmpty()) {
+      return formatCoverUri(albumUri);
+    }
+  }
+
+  const QJsonArray tracks = object.value("tracks").toArray();
+  for (const QJsonValue &tVal : tracks) {
+    if (tVal.isObject()) {
+      const QJsonObject tObj = tVal.toObject();
+      const QJsonObject trk = (tObj.contains("track") && tObj.value("track").isObject())
+                                  ? tObj.value("track").toObject()
+                                  : tObj;
+      const QString trkUri = parseCoverUri(trk);
+      if (!trkUri.isEmpty()) {
+        return formatCoverUri(trkUri);
+      }
+    }
+  }
+
+  return {};
 }
 
 Artist parseArtist(const QJsonObject &object) {

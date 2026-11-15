@@ -38,6 +38,7 @@ LibraryController::LibraryController(PlaylistService *playlistService, ArtistSer
             }
 
             m_playlistModel->setPlaylist(playlistWithLikes);
+            m_currentPlaylistUid = playlistWithLikes.uid.isEmpty() ? m_currentPlaylistUid : playlistWithLikes.uid;
             m_currentPlaylistTitle = playlistWithLikes.title;
             m_currentPlaylistCoverUri = playlistWithLikes.coverUri;
             m_currentPlaylistTrackCount = playlistWithLikes.trackCount;
@@ -70,6 +71,11 @@ LibraryController::LibraryController(PlaylistService *playlistService, ArtistSer
             m_libraryPlaylistsModel->setPlaylists(playlists);
           });
 
+  connect(m_playlistService, &PlaylistService::playlistCoverUpdated, this,
+          [this](int kind, const QString &coverUri) {
+            m_libraryPlaylistsModel->updateCoverUri(kind, coverUri);
+          });
+
   connect(m_playlistService, &PlaylistService::errorOccurred, this,
           [this](const QString &message) {
             if (m_loadingPlaylist) {
@@ -94,8 +100,9 @@ LibraryController::LibraryController(PlaylistService *playlistService, ArtistSer
             }
           });
 
-  connect(m_playlistService, &PlaylistService::playlistDeleted, this, [this](int) {
+  connect(m_playlistService, &PlaylistService::playlistDeleted, this, [this](int kind) {
     m_playlistModel->clear();
+    m_libraryPlaylistsModel->removePlaylistByKind(kind);
     emit statusChanged("Плейлист удалён");
 
     if (!m_userId.isEmpty()) {
@@ -336,6 +343,7 @@ void LibraryController::loadPlaylist(const QString &uid, int kind) {
   m_playlistModel->clear();
   m_similarPlaylists.clear();
   emit similarPlaylistsChanged();
+  m_currentPlaylistUid = playlistUid;
   m_currentPlaylistTitle.clear();
   m_currentPlaylistCoverUri.clear();
   m_currentPlaylistTrackCount = 0;
@@ -371,6 +379,10 @@ bool LibraryController::isLoadingPlaylist() const {
 
 QString LibraryController::currentPlaylistTitle() const {
   return m_currentPlaylistTitle;
+}
+
+QString LibraryController::currentPlaylistUid() const {
+  return m_currentPlaylistUid;
 }
 
 QString LibraryController::currentPlaylistCoverUri() const {
@@ -497,6 +509,7 @@ void LibraryController::deleteCurrentPlaylist() {
     return;
   }
 
+  m_libraryPlaylistsModel->removePlaylistByKind(kind);
   m_playlistService->deletePlaylist(m_userId, kind);
 }
 

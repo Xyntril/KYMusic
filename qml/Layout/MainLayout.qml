@@ -1,5 +1,6 @@
 import QtQuick
-import QtQuick.Controls.Basic
+import QtQuick.Controls
+import org.kde.kirigami as Kirigami
 import YaMusic 1.0
 
 Item {
@@ -7,10 +8,12 @@ Item {
 
     property var controller
     property var authController
+    property bool sidebarVisible: true
+    readonly property bool effectiveSidebarVisible: (typeof window !== "undefined" && window.isMobileMode) ? false : root.sidebarVisible
 
-    readonly property int topBarHeight: 68
-    readonly property int sidebarWidth: 220
-    readonly property int contextPanelWidth: 280
+    readonly property int topBarHeight: ((typeof window !== "undefined" && window.isMobileMode) && !root.canGoBack) ? 0 : ((typeof window !== "undefined" && window.isMobileMode) ? 48 : 68)
+    readonly property int sidebarWidth: sidebar.implicitWidth
+    readonly property int contextPanelWidth: 0
 
     readonly property string currentSection:
         navigationController.currentSection
@@ -25,10 +28,7 @@ Item {
         navigationController.navigationStack.length > 0 &&
         navigationController.currentPageType !== "section"
 
-    readonly property bool contextPanelVisible:
-        root.currentPageType === "artist" ||
-        root.currentPageType === "album" ||
-        root.currentPageType === "playlist"
+    readonly property bool contextPanelVisible: false
 
     readonly property string contextType:
         navigationController.contextTypeForCurrentPage()
@@ -36,6 +36,15 @@ Item {
     NavigationController {
         id: navigationController
         controller: root.controller
+        authController: root.authController
+    }
+
+    function selectSection(section) {
+        navigationController.selectSection(section)
+    }
+
+    function openMenu(targetItem) {
+        topBar.openMenu(targetItem)
     }
 
     Rectangle {
@@ -51,7 +60,8 @@ Item {
         anchors.left: parent.left
         anchors.bottom: parent.bottom
 
-        width: root.sidebarWidth
+        visible: root.effectiveSidebarVisible
+        width: root.effectiveSidebarVisible ? sidebar.implicitWidth : 0
 
         currentSection: root.currentSection
 
@@ -64,7 +74,7 @@ Item {
         id: topBar
 
         anchors.top: parent.top
-        anchors.left: sidebar.right
+        anchors.left: root.effectiveSidebarVisible ? sidebar.right : parent.left
         anchors.right: parent.right
 
         height: root.topBarHeight
@@ -80,7 +90,7 @@ Item {
 
     Row {
         anchors.top: topBar.bottom
-        anchors.left: sidebar.right
+        anchors.left: root.effectiveSidebarVisible ? sidebar.right : parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
 
@@ -89,7 +99,7 @@ Item {
         Item {
             id: mainArea
 
-            width: parent.width - (root.contextPanelVisible ? root.contextPanelWidth + 1 : 0)
+            width: parent.width
             height: parent.height
             clip: true
 
@@ -97,25 +107,40 @@ Item {
                 id: contentScrollView
 
                 anchors.fill: parent
-                anchors.topMargin: 20
-                anchors.leftMargin: 28
-                anchors.rightMargin: 28
+                anchors.topMargin: (typeof window !== "undefined" && window.isMobileMode) ? 0 : Kirigami.Units.largeSpacing
+                anchors.leftMargin: (typeof window !== "undefined" && window.isMobileMode) ? 10 : (Kirigami.Units.largeSpacing * 2)
+                anchors.rightMargin: (typeof window !== "undefined" && window.isMobileMode) ? 10 : Kirigami.Units.smallSpacing
 
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
 
-                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                readonly property bool pageIsFillHeight:
+                    pageLoader.item !== null && pageLoader.item !== undefined &&
+                    pageLoader.item.fillHeight === true
+
+                ScrollBar.vertical: ScrollBar {
+                    id: contentScrollBar
+                    readonly property bool isMobile: (typeof window !== "undefined" && window.isMobileMode)
+                    policy: contentScrollView.pageIsFillHeight
+                        ? ScrollBar.AlwaysOff
+                        : ScrollBar.AsNeeded
+                    width: isMobile ? 3 : 10
+                    interactive: !isMobile
+                    opacity: isMobile ? (active ? 0.5 : 0) : 1.0
+                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                }
 
                 contentWidth: width
-                contentHeight: Math.max(
-                    pageLoader.height + bottomContentSpacer.height,
-                    height
-                )
+                contentHeight: contentScrollView.pageIsFillHeight
+                    ? height
+                    : Math.max(pageLoader.height + bottomContentSpacer.height, height)
 
                 Loader {
                     id: pageLoader
 
-                    width: contentScrollView.width
+                    width: contentScrollView.width - (!contentScrollView.pageIsFillHeight && contentScrollBar.visible && !contentScrollBar.isMobile
+                        ? (contentScrollBar.width + Kirigami.Units.largeSpacing)
+                        : (contentScrollBar.isMobile ? 0 : Kirigami.Units.largeSpacing))
 
                     // Страницы, которым нужна вся высота области просмотра,
                     // берут её отсюда: считать её из item.implicitHeight нельзя —
@@ -139,27 +164,11 @@ Item {
                 Item {
                     id: bottomContentSpacer
 
-                    width: contentScrollView.width
-                    height: 40
+                    width: pageLoader.width
+                    height: contentScrollView.pageIsFillHeight ? 0 : 40
                     y: pageLoader.height
                 }
             }
-        }
-
-        Rectangle {
-            width: root.contextPanelVisible ? 1 : 0
-            height: parent.height
-            color: AppTheme.divider
-        }
-
-        ContextPanel {
-            id: contextPanel
-
-            width: root.contextPanelVisible ? root.contextPanelWidth : 0
-            height: parent.height
-
-            contextType: root.contextType
-            controller: root.controller
         }
     }
 
@@ -174,7 +183,7 @@ Item {
     // Страницы разделов не знают про NavigationController, поэтому сообщают о навигации сигналами
     Connections {
         target: root.currentPageType === "section" &&
-                (root.currentSection === "home" || root.currentSection === "genres")
+                (root.currentSection === "home" || root.currentSection === "genres" || root.currentSection === "library")
             ? pageLoader.item
             : null
 

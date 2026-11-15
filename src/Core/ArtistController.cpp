@@ -60,7 +60,6 @@ ArtistController::ArtistController(ArtistService *artistService, AlbumService *a
 
             emit loadingChanged();
             emit artistChanged();
-            emit statusChanged(QStringLiteral("Исполнитель загружен: %1").arg(artist.name));
           });
 
   connect(m_artistService, &ArtistService::errorOccurred, this, [this](const QString &message) {
@@ -355,6 +354,10 @@ void ArtistController::tryAdvanceRadio() {
 
   m_radioNeedsResume = false;
 
+  if (queue->repeatMode() == QueueService::RepeatOne) {
+    return;
+  }
+
   if (queue->hasNext()) {
     queue->next();
     const Track next = queue->currentTrack();
@@ -376,7 +379,11 @@ void ArtistController::continueIfStalled() {
   QueueService *queue = m_playbackController->queueService();
 
   if (m_radioNeedsResume) {
-    if (queue->hasNext()) {
+    if (queue->repeatMode() == QueueService::RepeatOne) {
+    return;
+  }
+
+  if (queue->hasNext()) {
       m_radioNeedsResume = false;
       queue->next();
       const Track next = queue->currentTrack();
@@ -398,6 +405,11 @@ void ArtistController::continueIfStalled() {
 
 void ArtistController::handleArtistRadioExhausted() {
   if (!m_radioActive) {
+    return;
+  }
+
+  QueueService *queue = m_playbackController->queueService();
+  if (queue != nullptr && queue->repeatMode() == QueueService::RepeatOne) {
     return;
   }
 

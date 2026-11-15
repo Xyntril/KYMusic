@@ -1,5 +1,5 @@
 import QtQuick
-import QtQuick.Controls.Basic
+import QtQuick.Controls
 import QtQuick.Layouts
 import YaMusic 1.0
 
@@ -128,7 +128,7 @@ Item {
                     height: root.trackHeight
 
                     controller: root.controller
-                    rowIndex: model.index
+                    rowIndex: index
                     trackId: model.trackId
                     title: model.title
                     artist: model.artist
@@ -142,7 +142,7 @@ Item {
 
                     onActivated: {
                         if (root.stationsController) {
-                            root.stationsController.selectStationTrack(model.index)
+                            root.stationsController.selectStationTrack(index)
                         }
                     }
                 }

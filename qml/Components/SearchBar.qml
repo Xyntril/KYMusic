@@ -1,5 +1,6 @@
 import QtQuick
-import QtQuick.Controls.Basic
+import QtQuick.Controls
+import org.kde.kirigami as Kirigami
 import YaMusic 1.0
 
 Item {
@@ -97,42 +98,25 @@ Item {
         // сбрасывался бы после первой же паузы в наборе.
         enabled: root.controller !== null && root.controller !== undefined
 
-        background: Rectangle {
-            radius: 11
-
-            color: searchField.activeFocus ? AppTheme.panelActive : AppTheme.panelSubtle
-
-            border.width: searchField.activeFocus ? 1 : 0
-            border.color: AppTheme.accent
-
-            Behavior on color {
-                ColorAnimation { duration: 120 }
-            }
-        }
-
-        Text {
+        Kirigami.Icon {
             anchors.left: parent.left
-            anchors.leftMargin: 14
+            anchors.leftMargin: 12
             anchors.verticalCenter: parent.verticalCenter
-
-            text: "⌕"
-            color: searchField.activeFocus ? AppTheme.textPrimary : AppTheme.textMuted
-            font.pixelSize: 23
-            font.weight: Font.Light
+            width: 18
+            height: 18
+            source: "edit-find"
+            color: searchField.activeFocus ? AppTheme.accent : AppTheme.textMuted
         }
 
-        Text {
+        BusyIndicator {
             anchors.right: parent.right
-            anchors.rightMargin: 14
+            anchors.rightMargin: 12
             anchors.verticalCenter: parent.verticalCenter
-
-            visible: root.controller !== null && root.controller !== undefined &&
+            width: 20
+            height: 20
+            running: root.controller !== null && root.controller !== undefined &&
                 root.controller.searching
-
-            text: "…"
-            color: AppTheme.accent
-            font.pixelSize: 18
-            font.bold: true
+            visible: running
         }
 
         onTextEdited: {

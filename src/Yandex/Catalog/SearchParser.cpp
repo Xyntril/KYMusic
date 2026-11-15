@@ -51,7 +51,7 @@ SearchResults SearchParser::parse(const QJsonObject &object) {
       playlist.kind = playlistObject.value("kind").toInt();
       playlist.title = playlistObject.value("title").toString();
       playlist.description = playlistObject.value("description").toString();
-      playlist.coverUri = playlistObject.value("coverUri").toString();
+      playlist.coverUri = ::parseCoverUri(playlistObject);
       playlist.trackCount = playlistObject.value("trackCount").toInt();
       searchResults.playlists.append(playlist);
     }

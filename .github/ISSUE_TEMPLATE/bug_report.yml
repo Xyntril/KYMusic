@@ -13,9 +13,9 @@ body:
   - type: input
     id: version
     attributes:
-      label: Версия YaMusic
-      description: Из окна «Настройки» или из имени файла пакета
-      placeholder: v0.14.3
+      label: Версия KYMusic
+      description: Из окна «О программе» или «Настройки»
+      placeholder: v1.0.0
     validations:
       required: true
 

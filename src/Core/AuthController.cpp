@@ -7,6 +7,8 @@ AuthController::AuthController(YandexAuth *auth, AccountService *accountService,
   Q_ASSERT(m_auth != nullptr);
   Q_ASSERT(m_accountService != nullptr);
 
+  m_authenticated = m_auth->isAuthenticated();
+
   connect(m_accountService, &AccountService::accountReceived, this, [this](const Account &account) {
     m_account = account;
     const bool wasAuthenticated = m_authenticated;
@@ -16,13 +18,16 @@ AuthController::AuthController(YandexAuth *auth, AccountService *accountService,
   });
 
   connect(m_accountService, &AccountService::errorOccurred, this, [this](const QString &message) {
-    const bool wasAuthenticated = m_authenticated;
-    m_authenticated = false;
-    if (wasAuthenticated != m_authenticated) emit authenticatedChanged();
+    if (!m_auth->isAuthenticated() || message.contains(QStringLiteral("token"), Qt::CaseInsensitive) ||
+        message.contains(QStringLiteral("401")) || message.contains(QStringLiteral("403"))) {
+      const bool wasAuthenticated = m_authenticated;
+      m_authenticated = false;
+      if (wasAuthenticated != m_authenticated) emit authenticatedChanged();
+    }
     emit errorOccurred(message);
   });
 
-  if (m_auth->isAuthenticated()) {
+  if (m_authenticated) {
     loadAccount();
   }
 }
@@ -65,20 +70,25 @@ void AuthController::loginWithToken(const QString &token) {
     return;
   }
 
+  const bool wasAuthenticated = m_authenticated;
+  m_authenticated = true;
+  if (!wasAuthenticated) {
+    emit authenticatedChanged();
+  }
+
   loadAccount();
 }
 
 void AuthController::logout() {
-  if (!m_auth->clearToken()) {
-    emit errorOccurred("Не удалось удалить токен");
-    return;
-  }
+  m_auth->clearToken();
 
   m_account = Account{};
   const bool wasAuthenticated = m_authenticated;
   m_authenticated = false;
   emit accountChanged();
-  if (wasAuthenticated != m_authenticated) emit authenticatedChanged();
+  if (wasAuthenticated != m_authenticated) {
+    emit authenticatedChanged();
+  }
 }
 
 void AuthController::loadAccount() {

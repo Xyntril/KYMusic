@@ -1,6 +1,8 @@
 import QtQuick
-import QtQuick.Controls.Basic
+import QtQuick.Controls
+import org.kde.kirigami as Kirigami
 import YaMusic 1.0
+import "../Components"
 
 Item {
     id: root
@@ -12,8 +14,11 @@ Item {
             ? root.controller.podcasts
             : []
 
-    readonly property int columns:
-        Math.max(1, Math.floor(contentColumn.width / 180))
+    readonly property bool isMobile: (typeof window !== "undefined" && window.isMobileMode) || contentColumn.width < 540
+
+    readonly property int columns: isMobile
+        ? 2
+        : Math.max(2, Math.floor((contentColumn.width + 12) / (180 + 12)))
 
     width: parent ? parent.width : 0
     implicitWidth: width
@@ -67,85 +72,23 @@ Item {
             Repeater {
                 model: root.podcasts
 
-                delegate: Item {
+                delegate: KdeMediaCard {
                     required property var modelData
 
-                    width: Math.floor((contentColumn.width - (root.columns - 1) * 12) / root.columns)
-                    height: 232
+                    cardWidth: Math.floor((contentColumn.width - (root.columns - 1) * 12) / root.columns)
+                    title: String(modelData.title || "")
+                    subtitle: String(modelData.description || "")
+                    coverUri: String(modelData.coverUri || "")
 
-                    Rectangle {
-                        id: artworkBox
-
-                        width: parent.width - 16
-                        height: width
-                        anchors.horizontalCenter: parent.horizontalCenter
-
-                        radius: 8
-                        color: AppTheme.artworkPlaceholder
-                        clip: true
-
-                        Image {
-                            id: artworkImage
-
-                            anchors.fill: parent
-
-                            source: String(modelData.coverUri || "").length > 0
-                                ? "image://yandex/" + modelData.coverUri
-                                : ""
-
-                            sourceSize: Qt.size(width * 2, width * 2)
-
-                            fillMode: Image.PreserveAspectCrop
-                            asynchronous: true
-                            cache: true
-                            smooth: true
-
-                            visible: status === Image.Ready
-                        }
-
-                        Label {
-                            anchors.centerIn: parent
-
-                            text: "♪"
-                            color: AppTheme.textMuted
-                            font.pixelSize: 28
-
-                            visible: artworkImage.status !== Image.Ready
+                    onActivated: {
+                        if (root.controller && modelData.id) {
+                            root.controller.playAlbum(modelData.id)
                         }
                     }
-
-                    Label {
-                        id: titleLabel
-
-                        width: parent.width - 16
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        anchors.top: artworkBox.bottom
-                        anchors.topMargin: 8
-
-                        text: String(modelData.title || "")
-
-                        color: AppTheme.textPrimary
-                        font.pixelSize: 14
-                        font.bold: true
-
-                        elide: Text.ElideRight
-                        maximumLineCount: 1
-                    }
-
-                    Label {
-                        width: parent.width - 16
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        anchors.top: titleLabel.bottom
-                        anchors.topMargin: 2
-
-                        text: String(modelData.description || "")
-
-                        color: AppTheme.textSecondary
-                        font.pixelSize: 12
-
-                        wrapMode: Text.Wrap
-                        maximumLineCount: 2
-                        elide: Text.ElideRight
+                    onPlayRequested: {
+                        if (root.controller && modelData.id) {
+                            root.controller.playAlbum(modelData.id)
+                        }
                     }
                 }
             }

@@ -1,127 +1,126 @@
 <div align="center">
 
-# 🎧 YaMusic
+# 🎧 KYMusic
 
-**Независимый desktop-клиент Яндекс Музыки**
+**Нативный клиент Яндекс Музыки для среды рабочего стола KDE Plasma и Plasma Mobile**
 
-Построен на C++20 · Qt 6.9 · QML · macOS, Linux и Windows
+Построен на C++20 · Qt 6 · KDE Frameworks 6 (Kirigami, KColorScheme, KXmlGui, KStatusNotifierItem, KIconThemes) · Linux / Plasma
 
-[![License](https://img.shields.io/github/license/andfriden/YaMusic)](https://github.com/andfriden/YaMusic/blob/main/LICENSE)
-[![Release](https://img.shields.io/github/v/tag/andfriden/YaMusic)](https://github.com/andfriden/YaMusic/releases)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![GitHub release](https://img.shields.io/github/v/release/Xyntril/KYMusic)](https://github.com/Xyntril/KYMusic/releases)
 
 </div>
 
 ---
 
-![YaMusic](screenshots/player.png)
+## О проекте
+
+**KYMusic** — это современный, быстрый и полностью нативный клиент Яндекс Музыки, разработанный специально для экосистемы **KDE Plasma 6** и мобильной оболочки **KDE Plasma Mobile**. В отличие от веб-обёрток на Electron, KYMusic написан на нативном C++20 с использованием **KDE Frameworks 6** и Qt Quick, потребляет минимум оперативной памяти, мгновенно запускается и идеально гармонирует с системным окружением KDE.
 
 ---
 
-## Возможности
+## Возможности KYMusic v1.0.0
 
-* OAuth-авторизация с сохранением между запусками
-* Поиск, «Моя волна», персональные рекомендации и плейлисты
-* Свои плейлисты: создание, переименование, удаление, добавление и удаление треков
-* Лайки треков, альбомов и исполнителей, недавно прослушанные
-* Раздел «Статистика»: сводка прослушиваний, топы треков и исполнителей, график «Минуты по дням» за последние 30 дней
-* «Новые релизы», жанры
-* Раздел «Станции»: полный список станций ротора с группировкой по типам
-* Раздел «Подкасты»: витрина подкастов из лендинга
-* Страницы альбомов, плейлистов, исполнителей и жанров
-* Радио исполнителя: все треки артиста, затем цепочка похожих без повторов
-* Единая очередь: repeat, shuffle, автопереход на похожий контент и продолжение альбома
-* Подсветка текущего трека
-* Отдельные окна: мини-плеер поверх других окон и развёрнутый плеер — с перемоткой, громкостью и Dynamic Player Accent; настройки — раздел в боковом меню
-* Единый набор SVG-иконок плеера вместо символьных обозначений (play/pause, next/prev, лайк, текст песни)
-* Текст песен с синхронизированной подсветкой строк, фолбэк на публичную базу LRCLIB
-* Выбор качества аудио (низкое / среднее / высокое / lossless) и показ кодека с битрейтом
-* Треки без цензуры — подмена на версии без цензуры по открытой базе FckCensorData
-* Блок «Колесо» на главной: подборки по вашим трекам и альбомам
-* Дорожки без прав на прослушивание помечаются в списке и уводят во внешний сервис вместо ошибки
-* Скачивание трека в «Загрузки» с метаданными и вложенной обложкой
-* Контекстное меню трека по правой кнопке мыши (в списках и плеере): «Моя волна по треку», лайк и дизлайк, добавление в плейлист, скачивание, переход к исполнителю и альбому, копирование «Исполнитель — Название»
-* Отчёты о падениях: перехват сигналов и `terminate`, файл отчёта на диске и отправка в трекер из окна
-* Тёмная тема Catppuccin (Latte / Macchiato), раздел настроек в боковом меню
-* Адаптивный интерфейс: верхняя навигация, боковая и контекстная панели
+### 🎨 100% нативная интеграция с KDE Plasma 6
+* **KDE Application Style**: полная поддержка системных тем оформления (`Breeze`, `Breeze Dark`, `Oxygen`, `Fusion`, `Union`). Приложение автоматически подхватывает системные шрифты, скругления, иконки и эффекты KDE.
+* **KColorScheme**: автоматическое следование системным цветовым палитрам рабочего стола — как светлым, так и тёмным.
+* **Системный трей `KStatusNotifierItem`**: нативный значок в трее с полным контекстным меню, управлением воспроизведением, регулировкой громкости и отображением статуса.
+* **Global Menu и `KHamburgerMenu`**: интеграция с глобальным меню KDE Plasma по D-Bus (`appmenu`), поддержка верхней строки меню `MenuBar` (`Ctrl+M`) и адаптивного гамбургер-меню для компактных панелей.
+* **Системные диалоги `KF6::XmlGui`**: нативные системные окна «О программе KYMusic» (`KAboutData`) и «О среде KDE».
 
-Полная история изменений по версиям — в [CHANGELOG.md](CHANGELOG.md).
+### 📻 Двусторонний MPRIS2 D-Bus
+* **Виджет KDE Plasma в панели задач**: полнофункциональное управление из системного апплета «Проигрыватель» по стандарту `org.mpris.MediaPlayer2.Player`.
+* **Двусторонняя синхронизация**: мгновенное обновление статуса воспроизведения (`PlaybackStatus`), режимов повтора (`LoopStatus`), случайного порядка (`Shuffle`), позиции трека и метаданных с обложками.
+* **Надёжная перемотка и кроссфейд**: исключены ложные переходы в статус `Stopped` при повторе одного трека (`RepeatOne`) или кроссфейде аудио-слотов; корректная отправка сигнала `Seeked(0)`.
+* **Уникальный сервис**: поддержка нескольких запущенных экземпляров с фолбэком на PID (`org.mpris.MediaPlayer2.kymusic.instance<PID>`).
+
+### 📱 Конвергентный режим KDE Plasma Mobile
+* **Адаптивная компоновка**: автоматический переход интерфейса между десктопным и мобильным режимами в зависимости от ширины экрана и окружения.
+* **Мобильные карточки**: центрированные вертикальные шапки на страницах Альбомов, Исполнителей и Плейлистов с крупными обложками 150×150 и переносящимися кнопками действий без обрезания.
+* **Сенсорная навигация**: нижняя панель табов `NavigationTabBar`, всплывающие разделы меню и кнопка «Назад» в шапках страниц.
+* **Мобильный мини-бар**: компактный плеер 56px с индикатором прогресса и вызовом полноэкранного режима в один тап.
+
+### 🌌 Визуальные эффекты и удобство
+* **Атмосферная подсветка `Ambient Glow`**: динамическое фоновое свечение, плавно подстраивающееся под цветовую палитру обложки текущего трека.
+* **Перетаскиваемый мини-плеер**: компактное плавающее окно поверх всех окон для удобного фонового прослушивания, полностью совместимое с Wayland.
+* **Развёрнутый плеер**: полноэкранный режим с синхронизированными текстами песен (LRC / LRCLIB), текущей очередью и похожими треками.
+* **Управление качеством**: поддержка аудиопотоков от низкого до FLAC Lossless с индикацией кодека и битрейта.
+* **Плавный переход (Crossfade)**: затухание от 0 до 15 секунд между треками.
+
+### 🎵 Каталог и функции Яндекс Музыки
+* **«Моя волна»**: персональный бесконечный поток музыки с мгновенной реакцией на лайки и пропуски.
+* **Полнотекстовый поиск**: умный живой ввод с подсказками, историей недавних запросов и нативной заглушкой.
+* **Медиатека**: создание, редактирование и удаление собственных плейлистов; списки «Мне нравится» для треков, альбомов и артистов.
+* **Каталог**: разделы «Новые релизы», «Жанры», «Станции» (радио ротора), «Подкасты» и персональные подборки лендинга.
+* **Статистика**: персональная сводка прослушиваний за последние 30 дней с графиком «Минуты по дням», топами треков и артистов.
+* **Скачивание треков**: сохранение музыки в «Загрузки» с заполнением ID3v2-тегов и встраиванием обложки через библиотеку TagLib.
+* **Фильтрация контента**: выявление сгенерированных ИИ треков (база Slopless) с автодизлайком/пропуском и подмена цензурированных треков (база FckCensorData).
 
 ---
 
 ## Установка
 
-Готовые пакеты содержат Qt runtime — отдельная установка Qt не требуется.
-Пакеты собираются автоматически в GitHub Actions при пуше тега `v*` (см. `.github/workflows/build.yml`).
+Готовые релизные пакеты доступны на странице [Releases](https://github.com/Xyntril/KYMusic/releases):
 
-| ОС | Архитектура | Пакет |
-|---|---|---|
-| Windows x64 | portable | `YaMusic-<version>-windows-x64-portable.zip` |
-| macOS | Intel | `YaMusic-<version>-macos-x64.dmg` |
-| macOS | Apple Silicon | `YaMusic-<version>-macos-arm64.dmg` |
-| Linux x86_64 | AppImage | `YaMusic-<version>-x86_64.AppImage` |
-| Linux x86_64 | архив | `YaMusic-<version>-linux-x86_64.tar.gz` |
-
-macOS-пакеты собираются отдельно для Intel (x64) и Apple Silicon (arm64);
-Windows — portable-версия; Linux — AppImage и архив.
-
----
-
-## Авторизация
-
-1. Получите OAuth-ссылку в приложении и откройте её в браузере.
-2. Авторизуйтесь в аккаунте Яндекса и разрешите доступ.
-3. Скопируйте ссылку из адресной строки браузера и вставьте обратно в YaMusic.
-
-Ссылка содержит данные доступа к аккаунту — не публикуйте её (GitHub, код, скриншоты, логи).
+* **Linux x86_64 (AppImage)**: самодостаточный пакет со всеми библиотеками. Для запуска достаточно сделать файл исполняемым:
+  ```bash
+  chmod +x KYMusic-1.0.0-x86_64.AppImage
+  ./KYMusic-1.0.0-x86_64.AppImage
+  ```
+* **Linux x86_64 (tar.gz)**: готовый архив для распаковки в систему.
 
 ---
 
 ## Сборка из исходников
 
-**Зависимости:** C++20, Qt 6.9 (Quick, Gui, Network, Multimedia; на Linux ещё DBus), TagLib, CMake 3.21+, Ninja. `CMakeLists.txt` — источник истины.
+### Зависимости
 
-**Ubuntu:**
+Для сборки KYMusic требуются: компилятор с поддержкой **C++20**, **CMake 3.21+**, **Ninja**, **Qt 6.6+** (Quick, Gui, Network, Multimedia, DBus), **KDE Frameworks 6** и **TagLib**.
 
+#### Arch Linux / Manjaro:
 ```bash
-sudo apt install build-essential cmake ninja-build qt6-base-dev qt6-declarative-dev qt6-multimedia-dev libtag1-dev
+sudo pacman -S --needed base-devel cmake ninja \
+    qt6-base qt6-declarative qt6-multimedia taglib \
+    extra-cmake-modules kirigami kcolorscheme kxmlgui \
+    kstatusnotifieritem kiconthemes qqc2-desktop-style
 ```
 
-**Arch Linux:**
-
+#### Ubuntu 24.04+ / Debian 13+:
 ```bash
-sudo pacman -S --needed base-devel cmake ninja qt6-base qt6-declarative qt6-multimedia taglib
+sudo apt update
+sudo apt install -y build-essential cmake ninja-build \
+    qt6-base-dev qt6-declarative-dev qt6-multimedia-dev libtag1-dev \
+    extra-cmake-modules libkf6coreaddons-dev libkf6colorscheme-dev \
+    libkf6xmlgui-dev libkf6statusnotifieritem-dev libkf6iconthemes-dev \
+    qml6-module-org-kde-kirigami qml6-module-org-kde-qqc2desktopstyle
 ```
 
-**macOS:** Xcode / Apple Clang, Qt 6.9, CMake, Ninja, TagLib (Homebrew).
-**Windows:** Visual Studio 2022 (C++ workload), Qt 6.9, CMake, Ninja, TagLib (vcpkg).
+#### Fedora 40+:
+```bash
+sudo dnf install -y gcc-c++ cmake ninja-build \
+    qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtmultimedia-devel taglib-devel \
+    extra-cmake-modules kf6-kcoreaddons-devel kf6-kcolorscheme-devel \
+    kf6-kxmlgui-devel kf6-kstatusnotifieritem-devel kf6-kiconthemes-devel \
+    kf6-kirigami-devel kf6-qqc2-desktop-style
+```
 
-Нужен именно Qt 6.9 (`find_package(Qt6 6.9 REQUIRED)`): в репозиториях Ubuntu 22.04 и 24.04 его ещё нет — ставьте Qt через online installer или берите дистрибутив со свежим Qt. TagLib обязателен, без него конфигурация не пройдёт.
-
-Общие шаги для всех ОС:
+### Сборка и запуск
 
 ```bash
-git clone https://github.com/andfriden/YaMusic.git
-cd YaMusic
-cmake -S . -B build
+git clone https://github.com/Xyntril/KYMusic.git
+cd KYMusic
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ```
 
-Запуск: `./build/yamusic` (Linux), `./build/YaMusic.app/Contents/MacOS/YaMusic` (macOS), `.\build\Debug\YaMusic.exe` (Windows). Многоконфигурационные генераторы (Xcode, Visual Studio) добавляют подкаталог сборки — `Debug` или `Release`.
-
-Установка в отдельный каталог: `cmake --install build --prefix dist`.
-
-### Релизные пакеты
-
-Пакеты собираются автоматически в GitHub Actions при пуше тега `v*` (см. `.github/workflows/build.yml`):
-
-* **Windows x64** — `YaMusic-<version>-windows-x64-portable.zip`
-* **macOS** — отдельно для Intel и Apple Silicon: `YaMusic-<version>-macos-x64.dmg`, `YaMusic-<version>-macos-arm64.dmg`
-* **Linux x86_64** — `YaMusic-<version>-x86_64.AppImage` и `YaMusic-<version>-linux-x86_64.tar.gz`
-
-AppImage собирается скриптом `scripts/build-appimage.sh` (скачивает linuxdeploy-инструменты в `.tools` и не требует FUSE):
-
+Запуск скомпилированного клиента:
 ```bash
-./scripts/build-appimage.sh --full
+./build/kymusic
+```
+
+Установка в систему:
+```bash
+sudo cmake --install build
 ```
 
 ---
@@ -129,70 +128,53 @@ AppImage собирается скриптом `scripts/build-appimage.sh` (ск
 ## Архитектура
 
 ```text
-QML → Controllers → Services / Models → (Yandex Music API, Playback)
+QML (Kirigami / KDE Desktop)
+         ↓
+C++ Controllers (AppController, KdeTrayController, KdeMenuManager, MediaControlsMPRIS)
+         ↓
+Services & Models (PlaybackController, PlayerService, QueueService, Yandex API)
+         ↓
+Qt 6 Multimedia (FFmpeg) & Linux D-Bus (MPRIS2 / StatusNotifierItem)
 ```
 
-C++ отвечает за бизнес-логику, API, авторизацию, модели, состояние приложения и воспроизведение; QML — за интерфейс, страницы и навигацию.
-
-Контроллеры: `AppController`, `AccentController`, `AlbumController`, `ArtistController`, `AudioQualityController`, `AuthController`, `CrashReporter`, `GenreController`, `LibraryController`, `LyricsController`, `PersonalController`, `PlaybackController`, `PlaybackSettingsController`, `PlayerAccentService`, `PreloadController`, `SearchController`, `StationsController`, `StatsController`, `ThemeController`, `UpdateController`.
-
-Воспроизведение построено на Qt Multimedia: `PlaybackController` связывает состояние с приложением, `PlayerService` управляет `QMediaPlayer`, `QueueService` — очередью.
+- **Интерфейс**: QML с компонентами Kirigami и стилем `org.kde.desktop`.
+- **Интеграция KDE**: `KAboutData`, `KXmlGui`, `KStatusNotifierItem`, системный трей и Global Menu.
+- **Воспроизведение**: Qt Multimedia с бэкендом FFmpeg и поддержкой плавного кроссфейда.
+- **D-Bus**: полнофункциональный MPRIS2-контроллер для интеграции с виджетами KDE Plasma.
 
 ---
 
-## Структура проекта
+## Авторизация
 
-```text
-YaMusic/
-├── src/        # Core, Crash, Download, MediaControls, Models, Playback, Player, Queue, Update, Yandex, Ynison
-├── qml/        # Components, Context, Home, Layout, MyWave, Pages, Theme
-├── data/       # genre_playlists.csv
-├── CMakeLists.txt
-└── main.cpp
-```
+1. При первом запуске нажмите «Войти через Яндекс ID».
+2. В браузере откроется официальная страница авторизации Яндекса.
+3. Разрешите доступ, скопируйте итоговый URL из адресной строки и вставьте в окно KYMusic.
+4. Токен безопасно сохраняется в системной конфигурации и используется для последующих запусков.
 
 ---
 
 ## Roadmap
 
-| Версия | Содержание |
-|---|---|
-| v0.1 | Технический POC: API, авторизация, базовое воспроизведение |
-| v0.2 | Поиск, результаты, страницы альбомов и исполнителей |
-| v0.3 | «Моя волна», рекомендации, недавно прослушанные |
-| v0.4 | Умная очередь, repeat, shuffle |
-| v0.5 | Плейлисты, библиотека |
-| v0.6 | Лайки |
-| v0.7 | Expanded Now Playing, перемотка, громкость (мини-плеер появился только в v0.14.3) |
-| v0.8 | Чарты, жанры, новые релизы, переключение тем ✅ |
-| v0.9 | Текст песен (Lyrics) ✅ |
-| v0.10 | Системные медиа-кнопки: MPRIS (Linux), SMTC (Windows), MPRemoteCommandCenter (macOS) ✅ |
-| v0.11 | Full Search, похожие треки, автопереход на похожий контент, история через /music-history, Ynison ✅ |
-| v0.12 | Похожие треки: `/tracks/{id}/similar` и вкладка «Похожие» в Expanded Now Playing ✅ |
-| v0.13 | Раздел «Станции» и радио исполнителя, управление плейлистами, лайки альбомов и исполнителей, раздел «Подкасты», скачивание треков с тегами и обложкой ✅ |
-| v0.14 | Качество звука (низкое…lossless) и показ кодека с битрейтом, тексты с фолбэком на LRCLIB, треки без цензуры, «Колесо» на главной, гард недоступных дорожек ✅ |
-| v0.14.1 | Дизлайки треков, правила очереди «Моей волны», автообновление с установкой на macOS ✅ |
-| v0.14.2 | Бейджи контента «AI» (база Slopless) и «Без цензуры» (FckCensorData) у треков ✅ |
-| v0.14.3 | Мини-плеер в отдельном окне, раздел «Статистика», отдельные окна плеера и настроек, SVG-иконки плеера, AppImage на старом LTS ✅ |
-| v0.15.0 | Новый интерфейс (боковой сайдбар, обновлённая главная с кнопками разделов), «Моя волна по треку», контекстное меню трека (правая кнопка мыши) в списках и плеере, ссылки на альбом и артиста, имя профиля в приветствии ✅ |
-| v0.15.1 | Умный поиск (живой ввод, подсказки, история, исправление опечаток), поиск в сайдбаре и на главной, скрытие AI-треков ✅ |
-| v0.16.0 | AI-метка по всем исполнителям с автодизлайком и пропуском, обновление базы Slopless при запуске, ссылки на каждого исполнителя, скоринг LRCLIB, установщик Windows (NSIS) в релизе ✅ |
+Планы по развитию проекта и список реализованных возможностей подробно описаны в [ROADMAP.md](ROADMAP.md).
 
-Выпущены версии до **v0.16.0** включительно. Раздел «Аудиокниги» живёт в ветке
-`feat/audiobooks`. Подробный план и легенда приоритетов — в [ROADMAP.md](ROADMAP.md).
+---
+
+## Безопасность
+
+Политика сообщений об уязвимостях и рекомендации по защите токенов описаны в [SECURITY.md](SECURITY.md).
 
 ---
 
 ## Disclaimer
 
-YaMusic — независимый неофициальный клиент Яндекс Музыки, не связан с компанией Яндекс. Для работы используется API Яндекс Музыки.
+KYMusic — независимый проект с открытым исходным кодом, не связанный с компанией Яндекс. Все товарные знаки принадлежат их законным владельцам.
 
 ---
 
-## Лицензия
+## Авторы и лицензия
 
-Проект распространяется на условиях лицензии, указанной в репозитории.
+- **Автор и ведущий разработчик KYMusic:** [Xyntril](https://github.com/Xyntril) (polina_leyne@proton.me) — системная архитектура, интеграция с KDE Frameworks 6, Kirigami, Plasma Mobile и MPRIS2.
+- **Базовый проект:** Anders Friden ([YaMusic](https://github.com/andfriden/YaMusic)) — автор оригинального клиента.
 
----
-
-[⬆ Наверх](#yamusic)
+Проект распространяется под лицензией **GNU General Public License v3.0** (GPL-3.0-or-later).
+Текст лицензии доступен в файлах [LICENSE](LICENSE) и [COPYING](COPYING).

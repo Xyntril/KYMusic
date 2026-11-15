@@ -1,5 +1,7 @@
 import QtQuick
-import QtQuick.Controls.Basic
+import QtQuick.Controls as QQC2
+import QtQuick.Layouts
+import org.kde.kirigami as Kirigami
 import YaMusic 1.0
 
 Item {
@@ -11,16 +13,13 @@ Item {
     property string title: ""
     property string artist: ""
     property string artistId: ""
-    // Все исполнители трека: [{"id", "name"}]. Если модель не отдала
-    // подробный список, ссылки строятся из одного artist/artistId.
     property var artists: []
     property string album: ""
     property string albumId: ""
     property string coverUri: ""
     property int durationMs: 0
 
-    // Подсветка текущего трека: по trackId (обычно) или по паре
-    // title+artist (моя волна — в ролях модели нет trackId)
+    // Подсветка текущего трека: по trackId (обычно) или по паре title+artist
     property string currentMatch: "id"
 
     readonly property bool highlighted: root.currentMatch === "titleArtist"
@@ -37,88 +36,59 @@ Item {
     property bool showAdd: false
     property bool showRemove: false
     property bool showAlbum: true
-
-    // Название трека ведёт в его альбом. На странице самого альбома
-    // ссылка выключена: там она открывала бы ту же страницу заново.
     property bool titleLinkToAlbum: true
 
     property bool alwaysBorder: false
     property int scrollbarOffset: 0
 
-    // Бейджи контента: показаны по artistId/trackId через контроллер,
-    // счётчики ревизий пересчитывают привязку после загрузки списков.
     property color aiBadgeColor: AppTheme.warning
     property color uncensoredBadgeColor: AppTheme.info
 
     readonly property bool showAiBadge: {
-        if (!root.hasController || root.trackId.length === 0) {
-            return false
-        }
-
-        // ИИ-трек, если хотя бы один его исполнитель есть в базе Slopless.
+        if (!root.hasController || root.trackId.length === 0) return false
         root.controller.aiRevision
-
         if (root.artists && root.artists.length > 0) {
             for (let i = 0; i < root.artists.length; ++i) {
                 const id = String(root.artists[i].id || "")
-                if (id.length > 0 && root.controller.isAiArtist(id)) {
-                    return true
-                }
+                if (id.length > 0 && root.controller.isAiArtist(id)) return true
             }
             return false
         }
-
         const id = String(root.artistId || "")
         return id.length > 0 && root.controller.isAiArtist(id)
     }
 
     readonly property bool showUncensoredBadge: {
-        if (!root.hasController || root.trackId.length === 0) {
-            return false
-        }
+        if (!root.hasController || root.trackId.length === 0) return false
         root.controller.censorRevision
         return root.controller.isTrackUncensored(root.trackId)
     }
 
-    // Геометрия (в оригиналах отличалась от места к месту)
-    property int rowHeight: 68
-    property int coverSize: 52
+    property int rowHeight: 62
+    property int coverSize: 44
     property int cornerRadius: 8
 
     readonly property bool hasController:
         root.controller !== null && root.controller !== undefined
 
-    // Артисты для ссылок: подробный список из модели, иначе один
-    // исполнитель из artist/artistId, иначе подпись-заглушка.
+    readonly property bool isCached:
+        root.hasController && root.trackId.length > 0 && root.controller.isTrackCached(root.trackId)
+
     readonly property var linkArtists: {
-        if (root.artists && root.artists.length > 0) {
-            return root.artists
-        }
-        if (root.artist.length > 0) {
-            return [{
-                id: root.artistId,
-                name: root.artist
-            }]
-        }
-        return [{
-            id: "",
-            name: qsTr("Неизвестный исполнитель")
-        }]
+        if (root.artists && root.artists.length > 0) return root.artists
+        if (root.artist.length > 0) return [{ id: root.artistId, name: root.artist }]
+        return [{ id: "", name: qsTr("Неизвестный исполнитель") }]
     }
 
-    // Дизлайк не лежит в моделях (у него нет отдельного раздела), поэтому
-    // спрашиваем состояние у контроллера и пересчитываем привязку по
-    // счётчику изменений — иначе строка не узнала бы о смене дизлайка.
     readonly property bool disliked: {
-        if (!root.hasController || root.trackId.length === 0) {
-            return false
-        }
-
+        if (!root.hasController || root.trackId.length === 0) return false
         root.controller.dislikesRevision
         return root.controller.isTrackDisliked(root.trackId)
     }
 
-    width: parent ? Math.max(0, parent.width - root.scrollbarOffset) : 0
+    width: ListView.view
+        ? Math.max(0, ListView.view.width - (ListView.view.ScrollBar && ListView.view.ScrollBar.vertical && ListView.view.ScrollBar.vertical.visible ? ListView.view.ScrollBar.vertical.width + 16 : 16))
+        : (parent ? Math.max(0, parent.width - root.scrollbarOffset) : 0)
     height: root.rowHeight
 
     signal activated()
@@ -145,6 +115,7 @@ Item {
     }
 
     Rectangle {
+        id: rowBackground
         anchors.fill: parent
         radius: root.cornerRadius
 
@@ -157,15 +128,13 @@ Item {
         border.width: root.highlighted || root.alwaysBorder ? 1 : 0
         border.color: root.highlighted ? AppTheme.accent : AppTheme.borderSubtle
 
-        // Акцентная боковая полоска слева — маркер текущего трека.
+        // Акцентная боковая полоска слева — маркер текущего трека
         Rectangle {
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-
             width: 3
             height: root.highlighted ? parent.height - 16 : 0
             radius: 1.5
-
             color: AppTheme.accent
             opacity: root.highlighted ? 1 : 0
 
@@ -177,363 +146,244 @@ Item {
             }
         }
 
-        Rectangle {
-            id: coverContainer
-
-            width: root.coverSize
-            height: root.coverSize
-
-            anchors.left: parent.left
+        // Строгий RowLayout: обложка, тексты, длительность, кнопки
+        RowLayout {
+            anchors.fill: parent
             anchors.leftMargin: 8
-            anchors.verticalCenter: parent.verticalCenter
+            anchors.rightMargin: 8
+            spacing: 10
 
-            radius: 6
-            color: AppTheme.artworkPlaceholder
-            clip: true
+            // 1. Скруглённая обложка 44x44
+            Rectangle {
+                Layout.preferredWidth: root.coverSize
+                Layout.preferredHeight: root.coverSize
+                Layout.alignment: Qt.AlignVCenter
+                radius: 6
+                color: AppTheme.artworkPlaceholder
+                clip: true
 
-            Image {
-                id: cover
+                Image {
+                    id: coverImage
+                    anchors.fill: parent
+                    source: root.coverUri.length > 0 ? ("image://yandex/" + root.coverUri) : ""
+                    sourceSize: Qt.size(root.coverSize * 2, root.coverSize * 2)
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    cache: true
+                    smooth: true
+                    visible: status === Image.Ready
+                }
 
-                anchors.fill: parent
-
-                source: root.coverUri.length > 0
-                    ? "image://yandex/" + root.coverUri
-                    : ""
-
-                sourceSize: Qt.size(root.coverSize * 2, root.coverSize * 2)
-
-                fillMode: Image.PreserveAspectCrop
-                asynchronous: true
-                cache: true
-                smooth: true
-
-                visible: status === Image.Ready
+                QQC2.Label {
+                    anchors.centerIn: parent
+                    text: "♪"
+                    color: Kirigami.Theme.disabledTextColor
+                    font.pixelSize: 18
+                    visible: coverImage.status !== Image.Ready
+                }
             }
 
-            Label {
-                anchors.centerIn: parent
+            // 2. Текстовый ColumnLayout со сжатием при нехватке места
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.minimumWidth: 80
+                Layout.alignment: Qt.AlignVCenter
+                spacing: 2
 
-                text: "♪"
-                color: AppTheme.textSecondary
-                font.pixelSize: root.coverSize * 0.38
-
-                visible: cover.status !== Image.Ready
-            }
-        }
-
-        Column {
-            id: trackInfo
-
-            // Выше фоновой MouseArea строки: иначе клики по названию,
-            // исполнителю и альбому перехватывает запуск трека.
-            z: 1
-
-            anchors.left: coverContainer.right
-            anchors.leftMargin: 12
-            anchors.right: badgesRow.visible ? badgesRow.left : durationLabel.left
-            anchors.rightMargin: 12
-            anchors.verticalCenter: parent.verticalCenter
-
-            spacing: 2
-
-            Item {
-                id: titleArea
-
-                width: Math.min(titleLabel.implicitWidth, trackInfo.width)
-                height: titleLabel.height
-
-                Label {
+                // Название трека
+                QQC2.Label {
                     id: titleLabel
-
-                    width: parent.width
-
+                    Layout.fillWidth: true
                     text: root.title.length > 0 ? root.title : qsTr("Без названия")
-
                     color: titleMouseArea.containsMouse && titleMouseArea.enabled
                         ? AppTheme.accent
                         : AppTheme.textPrimary
-                    font.pixelSize: 14
-                    font.bold: true
-
-                    verticalAlignment: Text.AlignVCenter
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
                     elide: Text.ElideRight
                     maximumLineCount: 1
-                }
 
-                MouseArea {
-                    id: titleMouseArea
-
-                    anchors.fill: parent
-
-                    hoverEnabled: true
-                    enabled: root.titleLinkToAlbum &&
-                        root.albumId.length > 0 && root.hasController
-                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                    z: 10
-
-                    onClicked: {
-                        if (root.hasController && root.albumId.length > 0) {
-                            root.controller.loadAlbum(root.albumId)
+                    MouseArea {
+                        id: titleMouseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        enabled: root.titleLinkToAlbum && root.albumId.length > 0 && root.hasController
+                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                        z: 10
+                        onClicked: {
+                            if (root.hasController && root.albumId.length > 0) {
+                                root.controller.loadAlbum(root.albumId)
+                            }
                         }
                     }
                 }
-            }
 
-            Item {
-                id: artistArea
-
-                width: Math.min(artistLinks.implicitWidth, trackInfo.width)
-                height: artistLinks.implicitHeight
-
+                // Исполнители трека
                 ArtistLinks {
                     id: artistLinks
-
-                    width: parent.width
+                    Layout.fillWidth: true
                     clip: true
-
                     artists: root.linkArtists
                     controller: root.controller
-                    pixelSize: 12
+                    pixelSize: 11
                     baseColor: AppTheme.textSecondary
                 }
-            }
 
-            Item {
-                id: albumArea
-
-                width: Math.min(albumLabel.implicitWidth, trackInfo.width)
-                height: albumLabel.height
-
-                visible: root.showAlbum && root.album.length > 0
-
-                Label {
+                // Альбом (если включено отображение)
+                QQC2.Label {
                     id: albumLabel
-
-                    width: parent.width
-
+                    Layout.fillWidth: true
+                    visible: root.showAlbum && root.album.length > 0
                     text: root.album
-                    color: albumMouseArea.containsMouse
-                        ? AppTheme.accent
-                        : AppTheme.textMuted
-
+                    color: albumMouseArea.containsMouse ? AppTheme.accent : AppTheme.textMuted
                     font.pixelSize: 10
                     elide: Text.ElideRight
                     maximumLineCount: 1
-                }
 
-                MouseArea {
-                    id: albumMouseArea
-
-                    anchors.fill: parent
-
-                    hoverEnabled: true
-                    enabled: root.albumId.length > 0 && root.hasController
-                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                    z: 10
-
-                    onClicked: {
-                        if (root.hasController && root.albumId.length > 0) {
-                            root.controller.loadAlbum(root.albumId)
+                    MouseArea {
+                        id: albumMouseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        enabled: root.albumId.length > 0 && root.hasController
+                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                        z: 10
+                        onClicked: {
+                            if (root.hasController && root.albumId.length > 0) {
+                                root.controller.loadAlbum(root.albumId)
+                            }
                         }
                     }
                 }
             }
-        }
 
-        // Бейджи контента стоят в правой группе — вместе с длительностью и
-        // кнопками, по вертикальному центру карточки.
-        Row {
-            id: badgesRow
+            // 3. Бейджи контента (AI / Без цензуры)
+            Row {
+                Layout.alignment: Qt.AlignVCenter
+                visible: root.showAiBadge || root.showUncensoredBadge
+                spacing: 4
 
-            anchors.right: durationLabel.left
-            anchors.rightMargin: 12
-            anchors.verticalCenter: parent.verticalCenter
-
-            visible: root.showAiBadge || root.showUncensoredBadge
-            spacing: 4
-
-            Badge {
-                visible: root.showAiBadge
-                text: "AI"
-                badgeColor: root.aiBadgeColor
-            }
-
-            Badge {
-                visible: root.showUncensoredBadge
-                text: "Без цензуры"
-                badgeColor: root.uncensoredBadgeColor
-            }
-        }
-
-        Label {
-            id: durationLabel
-
-            width: 44
-
-            anchors.right: rightButtons.left
-            anchors.rightMargin: 6
-            anchors.verticalCenter: parent.verticalCenter
-
-            text: AppTheme.formatDuration(root.durationMs)
-
-            color: AppTheme.textSecondary
-            font.pixelSize: 11
-            horizontalAlignment: Text.AlignRight
-        }
-
-        Row {
-            id: rightButtons
-
-            // Выше фоновой MouseArea строки, иначе кнопки «×», «+»,
-            // лайк и дизлайк не получают клики.
-            z: 1
-
-            anchors.right: parent.right
-            anchors.rightMargin: 8
-            anchors.verticalCenter: parent.verticalCenter
-
-            spacing: 2
-
-            Item {
-                width: 30
-                height: 30
-
-                visible: root.showRemove
-
-                Label {
-                    anchors.centerIn: parent
-
-                    text: "×"
-                    color: removeMouse.containsMouse ? AppTheme.accent : AppTheme.textMuted
-                    font.pixelSize: 18
-                    font.bold: true
+                Badge {
+                    visible: root.showAiBadge
+                    text: "AI"
+                    badgeColor: root.aiBadgeColor
                 }
 
-                MouseArea {
-                    id: removeMouse
-
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-
-                    onClicked: root.removeRequested(root.rowIndex)
+                Badge {
+                    visible: root.showUncensoredBadge
+                    text: "Без цензуры"
+                    badgeColor: root.uncensoredBadgeColor
                 }
             }
 
-            Item {
-                width: 30
-                height: 30
+            // 4. Отдельный Label длительности (никогда не наезжает на кнопки)
+            QQC2.Label {
+                Layout.preferredWidth: 44
+                Layout.alignment: Qt.AlignVCenter
+                horizontalAlignment: Text.AlignRight
+                rightPadding: 4
+                text: AppTheme.formatDuration(root.durationMs)
+                color: AppTheme.textSecondary
+                font.pixelSize: 11
+            }
 
-                visible: root.showAdd
+            // 5. Блок кнопок действий справа с кнопкой «Три точки»
+            RowLayout {
+                Layout.alignment: Qt.AlignVCenter
+                spacing: 2
 
-                Label {
-                    anchors.centerIn: parent
+                readonly property bool compactButtons: root.width < 480
 
-                    text: "+"
-                    color: addMouse.containsMouse ? AppTheme.accent : AppTheme.textMuted
-                    font.pixelSize: 18
-                    font.bold: true
+                QQC2.ToolButton {
+                    visible: !parent.compactButtons && root.hasController && root.trackId.length > 0
+                    icon.name: root.isCached ? "object-select-symbolic" : "download"
+                    icon.color: root.isCached ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
+                    implicitWidth: 30
+                    implicitHeight: 30
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: root.isCached ? qsTr("Сохранено в кэше") : qsTr("Скачать в кэш")
+                    onClicked: {
+                        if (root.hasController && root.trackId.length > 0) {
+                            if (!root.isCached) {
+                                root.controller.downloadTrack(
+                                    root.trackId, root.title, root.artist, root.album, root.coverUri, root.durationMs
+                                )
+                            }
+                        }
+                    }
                 }
 
-                MouseArea {
-                    id: addMouse
-
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-
+                QQC2.ToolButton {
+                    visible: !parent.compactButtons && root.showAdd
+                    icon.name: "list-add"
+                    implicitWidth: 30
+                    implicitHeight: 30
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("Добавить в плейлист")
                     onClicked: root.addRequested(root.trackId, root.albumId)
                 }
-            }
 
-            Item {
-                width: 34
-                height: 34
-
-                visible: root.showLike
-
-                Label {
-                    anchors.centerIn: parent
-
-                    text: root.liked ? "♥" : "♡"
-                    color: root.liked ? AppTheme.accent : AppTheme.textSecondary
-                    font.pixelSize: 21
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-
+                QQC2.ToolButton {
+                    visible: !parent.compactButtons && root.showLike
+                    icon.name: root.liked ? "starred-symbolic" : "non-starred-symbolic"
+                    implicitWidth: 30
+                    implicitHeight: 30
+                    checkable: true
+                    checked: root.liked
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: root.liked ? qsTr("Убрать из «Мне нравится»") : qsTr("Мне нравится")
                     onClicked: {
                         if (root.hasController && root.trackId.length > 0) {
                             root.controller.toggleLike(root.trackId, root.liked)
                         }
                     }
                 }
-            }
 
-            Item {
-                width: 34
-                height: 34
-
-                visible: root.showDislike
-
-                Label {
-                    anchors.centerIn: parent
-
-                    text: "♡"
-                    color: root.disliked
-                        ? AppTheme.accent
-                        : dislikeMouse.containsMouse ? AppTheme.textPrimary : AppTheme.textSecondary
-                    font.pixelSize: 21
-
-                    Behavior on color {
-                        ColorAnimation { duration: 120 }
-                    }
-                }
-
-                // Перечёркнутое сердце — признак дизлайка.
-                Rectangle {
-                    anchors.centerIn: parent
-
-                    width: 17
-                    height: 1.5
-                    radius: 0.75
-
-                    color: root.disliked ? AppTheme.accent : AppTheme.textMuted
-                    rotation: -45
-
-                    opacity: root.disliked ? 1 : (dislikeMouse.containsMouse ? 0.6 : 0.35)
-
-                    Behavior on opacity {
-                        NumberAnimation { duration: 120 }
-                    }
-                }
-
-                MouseArea {
-                    id: dislikeMouse
-
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-
+                QQC2.ToolButton {
+                    visible: !parent.compactButtons && root.showDislike
+                    icon.name: "dialog-cancel"
+                    implicitWidth: 30
+                    implicitHeight: 30
+                    checkable: true
+                    checked: root.disliked
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: root.disliked ? qsTr("Убрать дизлайк") : qsTr("Не нравится")
                     onClicked: {
                         if (root.hasController && root.trackId.length > 0) {
                             root.controller.toggleDislike(root.trackId, root.disliked)
                         }
                     }
                 }
+
+                QQC2.ToolButton {
+                    visible: root.showRemove
+                    icon.name: "edit-delete"
+                    implicitWidth: 30
+                    implicitHeight: 30
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("Удалить из списка")
+                    onClicked: root.removeRequested(root.rowIndex)
+                }
+
+                // Кнопка «Три точки» (overflow-menu) для доступа ко всем действиям трека
+                QQC2.ToolButton {
+                    id: moreButton
+                    icon.name: "overflow-menu"
+                    implicitWidth: 30
+                    implicitHeight: 30
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("Действия с треком")
+                    onClicked: contextMenu.popup(moreButton, 0, moreButton.height)
+                }
             }
         }
 
         MouseArea {
             id: rowMouseArea
-
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             acceptedButtons: Qt.LeftButton | Qt.RightButton
-            z: 0
+            z: -1
 
             onClicked: function(mouse) {
                 if (mouse.button === Qt.LeftButton) {

@@ -42,12 +42,14 @@ void ArtistAlbumsModel::setAlbums(const QList<Album> &albums) {
   beginResetModel();
   m_albums = albums;
   endResetModel();
+  emit countChanged();
 }
 
 void ArtistAlbumsModel::clear() {
   beginResetModel();
   m_albums.clear();
   endResetModel();
+  emit countChanged();
 }
 
 Album ArtistAlbumsModel::albumAt(int index) const {

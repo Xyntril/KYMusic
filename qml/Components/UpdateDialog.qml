@@ -1,5 +1,5 @@
 import QtQuick
-import QtQuick.Controls.Basic
+import QtQuick.Controls
 import QtQuick.Layouts
 import YaMusic 1.0
 
@@ -54,7 +54,7 @@ Popup {
         Label {
             Layout.fillWidth: true
 
-            text: "Обновление YaMusic"
+            text: "Обновление KYMusic"
             color: AppTheme.textPrimary
             font.pixelSize: 18
             font.bold: true

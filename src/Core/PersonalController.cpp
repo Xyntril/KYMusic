@@ -81,9 +81,6 @@ PersonalController::PersonalController(YandexPersonal *yandexPersonal,
             }
 
             m_personalPlaylistsModel->setSections(m_recommendationSections);
-
-            emit statusChanged(
-                QStringLiteral("Новых плейлистов загружено: %1").arg(section.playlists.size()));
           });
 }
 

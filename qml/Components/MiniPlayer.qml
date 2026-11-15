@@ -1,27 +1,26 @@
 import QtQuick
-import QtQuick.Controls.Basic
-import QtQuick.Effects
+import QtQuick.Controls as QQC2
+import QtQuick.Layouts
 import QtQuick.Window
-import QtMultimedia
+import QtCore as QC
+import org.kde.kirigami as Kirigami
 import YaMusic 1.0
 
-// Компактное отдельное окно поверх других окон: диск-обложка, название,
-// артист и кнопки управления. Живёт в собственном QQuickWindow, но делит
-// с основным окном один QQmlEngine, поэтому видит AppTheme-сингилтон,
-// контекстные свойства и image-провайдер "yandex".
 Window {
     id: root
 
     property var controller
 
-    width: 400
-    height: 134
+    width: 390
+    height: 120
 
-    // Поверх других окон, без рамки и без кнопки в таск-баре.
     flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
     color: "transparent"
     visible: false
     modality: Qt.NonModal
+
+    Kirigami.Theme.inherit: true
+    Kirigami.Theme.colorSet: Kirigami.Theme.Window
 
     readonly property bool hasController:
         root.controller !== null && root.controller !== undefined
@@ -33,56 +32,41 @@ Window {
     readonly property bool playing:
         root.hasController && root.controller.playing
 
-    readonly property bool hasPlayerAccent:
-        root.hasTrack &&
-        root.hasController &&
-        root.controller.accentController.playerAccent !== undefined &&
-        root.controller.accentController.playerAccent !== null &&
-        root.controller.accentController.playerAccent.valid
-
-    readonly property color playerAccent:
-        root.hasPlayerAccent
-            ? root.controller.accentController.playerAccent
-            : AppTheme.accent
-
     readonly property string currentTrackId:
         root.hasController ? String(root.controller.currentTrackId || "") : ""
-
-    readonly property bool currentTrackAi: {
-        if (!root.hasController) {
-            return false
-        }
-
-        // Пересчитываем при смене трека и после загрузки базы Slopless.
-        root.controller.currentTrackId
-        root.controller.aiRevision
-
-        return root.controller.currentTrackIsAi()
-    }
 
     readonly property bool currentTrackLiked:
         root.hasController && root.controller.currentTrackLiked
 
-    // Дизлайк хранится в LikesService, а не в модели: пересчитываем
-    // привязку по счётчику изменений, иначе кнопка не обновится.
     readonly property bool currentTrackDisliked: {
-        if (!root.hasController) {
-            return false
-        }
+        if (!root.hasController) return false
         root.controller.dislikesRevision
         return root.controller.isTrackDisliked(root.currentTrackId)
     }
 
-    // Расширенный плеер по клику на обложку.
     signal expandedRequested()
-
-    // Переход в большое окно плеера по отдельной кнопке.
     signal expandRequested()
-
-    // Закрытие мини-плеера по «×»: возврат в основное окно.
     signal closeRequested()
 
+    QC.Settings {
+        id: miniSettings
+        category: "miniplayer"
+        property int posX: -1
+        property int posY: -1
+    }
+
+    onXChanged: {
+        if (root.visible && root.x > 0) miniSettings.posX = root.x
+    }
+    onYChanged: {
+        if (root.visible && root.y > 0) miniSettings.posY = root.y
+    }
+
     function showPlayer() {
+        if (miniSettings.posX > 0 && miniSettings.posY > 0) {
+            root.x = miniSettings.posX
+            root.y = miniSettings.posY
+        }
         root.show()
         root.raise()
         root.requestActivate()
@@ -92,536 +76,227 @@ Window {
         root.visible = false
     }
 
+    // Корпус окна мини-плеера в стиле KDE Plasma 6
     Rectangle {
+        id: bgCard
         anchors.fill: parent
-        anchors.margins: 6
-        radius: 16
-
-        color: root.hasPlayerAccent
-            ? Qt.rgba(root.playerAccent.r, root.playerAccent.g, root.playerAccent.b, 0.18)
-            : AppTheme.macchiatoBase
-
+        radius: 8
+        color: Kirigami.Theme.backgroundColor
         border.width: 1
-        border.color: root.hasPlayerAccent
-            ? Qt.rgba(root.playerAccent.r, root.playerAccent.g, root.playerAccent.b, 0.35)
-            : AppTheme.macchiatoSurface1
+        border.color: Kirigami.Theme.highlightColor
 
-        // Перетаскивание окна за фон и заголовок. Объявлен первым, чтобы
-        // лежать под кнопками и обложкой и не перехватывать их клики.
-        MouseArea {
-            id: dragArea
-
-            anchors.fill: parent
-            cursorShape: Qt.ArrowCursor
-
-            property var dragOffset: null
-
-            onPressed: function(mouse) {
-                dragOffset = Qt.point(mouse.x, mouse.y)
-            }
-
-            onMouseXChanged: {
-                if (dragOffset) {
-                    root.setX(root.x + mouseX - dragOffset.x)
+        // Перетаскивание окна мышкой по рабочему столу (Wayland + X11 KWin)
+        DragHandler {
+            target: null
+            onActiveChanged: {
+                if (active) {
+                    root.startSystemMove()
                 }
-            }
-
-            onMouseYChanged: {
-                if (dragOffset) {
-                    root.setY(root.y + mouseY - dragOffset.y)
-                }
-            }
-
-            onReleased: {
-                dragOffset = null
             }
         }
 
-        // Диск-обложка: круглый артворк, как на карточке артиста. Используем
-        // провайдер "yandex/circle", который сам вырезает круг из обложки
-        // (тот же приём, что на странице/карточке артиста). Круглое
-        // изображение вращаем вокруг центра — ноль спрашиваний про клип,
-        // углов квадрата и шейдеров.
+        // Обложка трека слева
         Rectangle {
-            id: discSlot
-
+            id: coverContainer
             anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: 16
-
-            width: 84
-            height: 84
-            radius: width / 2
+            anchors.top: parent.top
+            anchors.bottom: progressSlider.top
+            anchors.margins: 10
+            anchors.bottomMargin: 4
+            width: height
+            radius: 6
+            color: AppTheme.panelSecondary
             clip: true
-
-            // Тёмная подложка-винил под круглым артворком.
-            Rectangle {
-                anchors.fill: parent
-                radius: width / 2
-                color: "#161616"
-            }
+            z: 5
 
             Image {
                 id: cover
-
                 anchors.fill: parent
-
                 source: root.hasTrack && root.controller.currentTrackCoverUri
-                    ? "image://yandex/circle/" + root.controller.currentTrackCoverUri
+                    ? "image://yandex/" + root.controller.currentTrackCoverUri
                     : ""
-
+                sourceSize: Qt.size(160, 160)
                 fillMode: Image.PreserveAspectCrop
                 asynchronous: true
                 cache: true
                 smooth: true
-
-                transform: Rotation {
-                    origin.x: cover.width / 2
-                    origin.y: cover.height / 2
-                    angle: spinHolder.angle
-                }
-
-                // Пока артворк не загрузился — плэйсхолдер круга.
-                Rectangle {
-                    anchors.centerIn: parent
-                    width: parent.width
-                    height: parent.height
-                    radius: width / 2
-                    visible: cover.status !== Image.Ready
-                    color: AppTheme.macchiatoSurface0
-
-                    Icon {
-                        anchors.centerIn: parent
-                        glyph: "note"
-                        color: AppTheme.macchiatoOverlay1
-                        size: 24
-                        strokeWidth: 1.7
-                    }
-                }
+                visible: status === Image.Ready
             }
 
-            // Плавное вращение угла картинки.
-            QtObject {
-                id: spinHolder
-                property real angle: 0
-            }
-
-            SequentialAnimation {
-                id: spinAnim
-                loops: Animation.Infinite
-                running: root.hasTrack && root.playing
-
-                NumberAnimation {
-                    target: spinHolder
-                    property: "angle"
-                    from: 0
-                    to: 360
-                    duration: 6000
-                    easing.type: Easing.Linear
-                }
-            }
-
-            // Центр (отверстие) пластинки.
-            Rectangle {
-                id: discHole
-
+            QQC2.Label {
                 anchors.centerIn: parent
-                width: 10
-                height: 10
-                radius: 5
-                color: "#0a0a0a"
-                border.width: 1
-                border.color: Qt.rgba(1, 1, 1, 0.3)
+                text: "♪"
+                color: Kirigami.Theme.disabledTextColor
+                font.pixelSize: 28
+                visible: cover.status !== Image.Ready
             }
 
             MouseArea {
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
                 onClicked: root.expandedRequested()
+                QQC2.ToolTip.visible: containsMouse
+                QQC2.ToolTip.text: qsTr("Развернуть обложку")
             }
         }
 
-        // Инфо и кнопки.
-        Column {
-            anchors.left: discSlot.right
+        // Кнопки управления окном в правом верхнем углу (KDE Plasma)
+        Row {
+            id: windowButtons
             anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: 14
-            anchors.rightMargin: 12
-
-            spacing: 4
-
-            Item {
-                width: parent.width
-                height: titleText.height
-
-                Text {
-                    id: titleText
-
-                    width: parent.width
-
-                    text: root.hasTrack ? root.controller.currentTrackTitle : "Нет трека"
-                    color: titleMouseArea.containsMouse && titleMouseArea.enabled
-                        ? AppTheme.accent
-                        : AppTheme.macchiatoText
-                    font.pixelSize: 14
-                    font.weight: Font.DemiBold
-                    elide: Text.ElideRight
-                    maximumLineCount: 1
-                }
-
-                MouseArea {
-                    id: titleMouseArea
-
-                    anchors.fill: parent
-
-                    hoverEnabled: true
-                    enabled: root.hasTrack && root.controller &&
-                        String(root.controller.currentTrackAlbumId || "").length > 0
-
-                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-
-                    onClicked: {
-                        if (!root.controller) {
-                            return
-                        }
-
-                        root.controller.loadAlbum(root.controller.currentTrackAlbumId)
-                    }
-                }
-            }
-
-            ArtistLinks {
-                width: parent.width
-
-                clip: true
-
-                artists: root.hasTrack && root.controller
-                    ? root.controller.currentTrackArtists
-                    : []
-                controller: root.controller
-                pixelSize: 12
-                baseColor: AppTheme.macchiatoSubtext1
-            }
-
-            Badge {
-                visible: root.currentTrackAi
-                text: "AI"
-                badgeColor: AppTheme.warning
-            }
-
-            Row {
-                width: parent.width
-                spacing: 6
-
-                Item {
-                    width: 34
-                    height: 34
-
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: 17
-                        color: likeArea.containsMouse ? Qt.rgba(
-                            root.playerAccent.r, root.playerAccent.g, root.playerAccent.b, 0.14)
-                            : "transparent"
-                    }
-
-                    Icon {
-                        anchors.centerIn: parent
-
-                        glyph: root.currentTrackLiked ? "heartFilled" : "heart"
-                        color: root.currentTrackLiked
-                            ? AppTheme.accent
-                            : AppTheme.macchiatoSubtext1
-                        size: 20
-                        strokeWidth: 1.7
-
-                        Behavior on color {
-                            ColorAnimation { duration: 120 }
-                        }
-                    }
-
-                    MouseArea {
-                        id: likeArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        enabled: root.hasTrack && root.controller &&
-                            root.currentTrackId.length > 0
-
-                        onClicked: {
-                            if (!root.controller) {
-                                return
-                            }
-                            root.controller.toggleLike(root.currentTrackId,
-                                root.currentTrackLiked)
-                        }
-                    }
-
-                    PlayerTip {
-                        text: root.currentTrackLiked
-                            ? qsTr("Убрать из «Мне нравится»")
-                            : qsTr("Мне нравится")
-                        target: likeArea
-                    }
-                }
-
-                Item {
-                    width: 34
-                    height: 34
-
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: 17
-                        color: dislikeArea.containsMouse ? Qt.rgba(
-                            root.playerAccent.r, root.playerAccent.g, root.playerAccent.b, 0.14)
-                            : "transparent"
-                    }
-
-                    Icon {
-                        anchors.centerIn: parent
-
-                        glyph: "heartOff"
-                        color: root.currentTrackDisliked
-                            ? AppTheme.accent
-                            : AppTheme.macchiatoSubtext1
-                        size: 20
-                        strokeWidth: 1.7
-
-                        Behavior on color {
-                            ColorAnimation { duration: 120 }
-                        }
-                    }
-
-                    MouseArea {
-                        id: dislikeArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        enabled: root.hasTrack && root.controller &&
-                            root.currentTrackId.length > 0
-
-                        onClicked: {
-                            if (!root.controller) {
-                                return
-                            }
-                            root.controller.toggleDislike(root.currentTrackId,
-                                root.currentTrackDisliked)
-                        }
-                    }
-
-                    PlayerTip {
-                        text: root.currentTrackDisliked
-                            ? qsTr("Убрать дизлайк")
-                            : qsTr("Не нравится")
-                        target: dislikeArea
-                    }
-                }
-
-                Item {
-                    width: 34
-                    height: 34
-
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: 17
-                        color: prevArea.containsMouse ? Qt.rgba(
-                            root.playerAccent.r, root.playerAccent.g, root.playerAccent.b, 0.14)
-                            : "transparent"
-                    }
-
-                    Icon {
-                        anchors.centerIn: parent
-                        glyph: "chevronLeft"
-                        color: AppTheme.macchiatoText
-                        size: 22
-                        strokeWidth: 2
-                    }
-
-                    MouseArea {
-                        id: prevArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            if (root.controller) {
-                                root.controller.previous()
-                            }
-                        }
-                    }
-
-                    PlayerTip {
-                        text: qsTr("Предыдущий трек")
-                        target: prevArea
-                    }
-                }
-
-                Item {
-                    width: 36
-                    height: 36
-
-                    Rectangle {
-                        id: miniPlayBg
-                        anchors.fill: parent
-                        radius: 18
-                        color: root.playerAccent
-                    }
-
-                    Icon {
-                        anchors.centerIn: parent
-                        glyph: root.playing ? "pause" : "play"
-                        color: AppTheme.accentOn
-                        size: 16
-                    }
-
-                    MouseArea {
-                        id: playArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            if (!root.controller) {
-                                return
-                            }
-                            if (root.playing) {
-                                root.controller.pause()
-                            } else {
-                                root.controller.play()
-                            }
-                        }
-                    }
-
-                    PlayerTip {
-                        text: root.playing
-                            ? qsTr("Пауза")
-                            : qsTr("Воспроизвести")
-                        target: playArea
-                    }
-                }
-
-                Item {
-                    width: 34
-                    height: 34
-
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: 17
-                        color: nextArea.containsMouse ? Qt.rgba(
-                            root.playerAccent.r, root.playerAccent.g, root.playerAccent.b, 0.14)
-                            : "transparent"
-                    }
-
-                    Icon {
-                        anchors.centerIn: parent
-                        glyph: "chevronRight"
-                        color: AppTheme.macchiatoText
-                        size: 22
-                        strokeWidth: 2
-                    }
-
-                    MouseArea {
-                        id: nextArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            if (root.controller) {
-                                root.controller.next()
-                            }
-                        }
-                    }
-
-                    PlayerTip {
-                        text: qsTr("Следующий трек")
-                        target: nextArea
-                    }
-                }
-            }
-        }
-
-        // Прогресс-бар воспроизведения.
-        Rectangle {
-            id: progressTrack
-
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            anchors.leftMargin: 12
-            anchors.rightMargin: 12
-            anchors.bottomMargin: 8
-
-            height: 3
-            radius: 1.5
-
-            color: AppTheme.macchiatoSurface0
-
-            Rectangle {
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-
-                width: {
-                    if (!root.hasController || Number(root.controller.duration) <= 0) {
-                        return 0
-                    }
-                    const ratio = Math.max(0, Math.min(1,
-                        Number(root.controller.position) / Number(root.controller.duration)))
-                    return parent.width * ratio
-                }
-                height: parent.height
-                radius: parent.radius
-
-                color: root.playerAccent
-            }
-
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-
-                onClicked: function(mouse) {
-                    if (!root.hasController) {
-                        return
-                    }
-                    const duration = Number(root.controller.duration)
-                    if (duration <= 0) {
-                        return
-                    }
-                    const ratio = Math.max(0, Math.min(1, mouse.x / width))
-                    root.controller.seek(Math.round(duration * ratio))
-                }
-            }
-        }
-
-        // Кнопка в правом верхнем углу: переход в большое окно.
-        Item {
             anchors.top: parent.top
-            anchors.right: parent.right
-            anchors.topMargin: 6
-            anchors.rightMargin: 6
+            anchors.margins: 6
+            spacing: 2
+            z: 10
 
-            width: 24
-            height: 24
-
-            Icon {
-                anchors.centerIn: parent
-                glyph: "expand"
-                color: expandArea.containsMouse ? AppTheme.macchiatoText : AppTheme.macchiatoOverlay1
-                size: 16
-                strokeWidth: 1.8
-            }
-
-            MouseArea {
-                id: expandArea
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
+            QQC2.ToolButton {
+                icon.name: "window-restore-symbolic"
+                implicitWidth: 26
+                implicitHeight: 26
+                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.text: qsTr("Вернуться в окно KYMusic")
                 onClicked: root.expandRequested()
             }
 
-            PlayerTip {
-                text: qsTr("Открыть в окне плеера")
-                target: expandArea
-                alignRight: true
-                below: true
+            QQC2.ToolButton {
+                icon.name: "window-close"
+                implicitWidth: 26
+                implicitHeight: 26
+                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.text: qsTr("Закрыть")
+                onClicked: root.closeRequested()
+            }
+        }
+
+        // Информация о треке и кнопки управления
+        ColumnLayout {
+            anchors.left: coverContainer.right
+            anchors.right: windowButtons.left
+            anchors.top: parent.top
+            anchors.bottom: progressSlider.top
+            anchors.margins: 10
+            anchors.rightMargin: 4
+            anchors.bottomMargin: 2
+            spacing: 2
+            z: 10
+
+            QQC2.Label {
+                Layout.fillWidth: true
+                text: root.hasTrack ? root.controller.currentTrackTitle : qsTr("Нет трека")
+                font.weight: Font.DemiBold
+                font.pixelSize: 13
+                elide: Text.ElideRight
+                color: Kirigami.Theme.textColor
+            }
+
+            QQC2.Label {
+                Layout.fillWidth: true
+                text: root.hasTrack ? root.controller.currentTrackArtist : ""
+                font.pixelSize: 11
+                opacity: 0.8
+                elide: Text.ElideRight
+                color: artistMouse.containsMouse ? Kirigami.Theme.highlightColor : Kirigami.Theme.disabledTextColor
+                visible: text.length > 0
+
+                MouseArea {
+                    id: artistMouse
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    hoverEnabled: true
+                    onClicked: {
+                        root.hidePlayer()
+                        if (typeof window !== "undefined") {
+                            window.show()
+                        }
+                        if (root.controller && String(root.controller.currentTrackArtistId || "").length > 0) {
+                            root.controller.loadArtist(root.controller.currentTrackArtistId)
+                        }
+                    }
+                }
+            }
+
+            // Нативные кнопки KDE Breeze
+            RowLayout {
+                spacing: 4
+
+                QQC2.ToolButton {
+                    icon.name: root.currentTrackLiked ? "starred-symbolic" : "non-starred-symbolic"
+                    implicitWidth: 30
+                    implicitHeight: 30
+                    checkable: true
+                    checked: root.currentTrackLiked
+                    enabled: root.hasTrack && root.currentTrackId.length > 0
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: checked ? qsTr("Убрать из «Мне нравится»") : qsTr("Мне нравится")
+                    onClicked: {
+                        if (root.controller && root.currentTrackId.length > 0) {
+                            root.controller.toggleLike(root.currentTrackId, root.currentTrackLiked)
+                        }
+                    }
+                }
+
+                QQC2.ToolButton {
+                    icon.name: "media-skip-backward"
+                    implicitWidth: 30
+                    implicitHeight: 30
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("Предыдущий трек")
+                    onClicked: {
+                        if (root.controller) root.controller.previous()
+                    }
+                }
+
+                QQC2.ToolButton {
+                    icon.name: root.playing ? "media-playback-pause" : "media-playback-start"
+                    implicitWidth: 32
+                    implicitHeight: 32
+                    highlighted: true
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: root.playing ? qsTr("Пауза") : qsTr("Воспроизвести")
+                    onClicked: {
+                        if (!root.controller) return
+                        if (root.playing) root.controller.pause(); else root.controller.play()
+                    }
+                }
+
+                QQC2.ToolButton {
+                    icon.name: "media-skip-forward"
+                    implicitWidth: 30
+                    implicitHeight: 30
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("Следующий трек")
+                    onClicked: {
+                        if (root.controller) root.controller.next()
+                    }
+                }
+            }
+        }
+
+        // Тонкий нативный ползунок Breeze Blue внизу
+        QQC2.Slider {
+            id: progressSlider
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.leftMargin: 8
+            anchors.rightMargin: 8
+            anchors.bottomMargin: 4
+            height: 14
+            z: 10
+
+            from: 0
+            to: (root.controller && root.controller.duration > 0)
+                ? root.controller.duration
+                : 1
+            value: (root.controller && !progressSlider.pressed)
+                ? root.controller.position
+                : 0
+            enabled: root.hasTrack && root.controller && root.controller.duration > 0
+
+            onMoved: {
+                if (root.controller && root.controller.duration > 0) {
+                    root.controller.seek(Math.round(value))
+                }
             }
         }
     }

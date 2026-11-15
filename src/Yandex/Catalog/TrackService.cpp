@@ -6,6 +6,7 @@
 #include "../YandexClient.h"
 
 #include <QCryptographicHash>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -14,6 +15,7 @@
 #include <QNetworkReply>
 #include <QRegularExpression>
 #include <QStringList>
+#include <QUrl>
 #include <QUrlQuery>
 #include <QXmlStreamReader>
 
@@ -22,6 +24,20 @@
 namespace {
 constexpr auto DownloadInfoSalt = "XGRlBW9FXlekgbPrRHuSiA";
 constexpr auto FileInfoSecret = "kzqU4XhfCaY6B6JTHODeq5";
+
+QString cleanTrackId(const QString &trackId) {
+  QString id = trackId.trimmed();
+  if (id.startsWith(QLatin1String("file://"))) {
+    QUrl url(id);
+    id = QFileInfo(url.toLocalFile()).completeBaseName();
+  } else if (id.contains('/') || id.contains('\\')) {
+    id = QFileInfo(id).completeBaseName();
+  }
+  if (id.contains(':')) {
+    id = id.section(':', 0, 0).trimmed();
+  }
+  return id;
+}
 } // namespace
 
 // TODO(YM-2244): вынести общую проверку trackId (trim + непустой) в YandexServiceBase.
@@ -68,7 +84,7 @@ void TrackService::loadStreamInfo(
 void TrackService::loadDownloadUrl(
     const QString &trackId) {
   const QString trimmedTrackId =
-      trackId.trimmed();
+      cleanTrackId(trackId);
 
   // Для сохранения отдаём предпочтение MP3 (максимальная
   // совместимость тегов и плееров), если такой вариант есть.
@@ -102,7 +118,7 @@ void TrackService::requestDownloadInfo(
   }
 
   const QString trimmedTrackId =
-      trackId.trimmed();
+      cleanTrackId(trackId);
 
   if (trimmedTrackId.isEmpty()) {
     emit errorOccurred("Track ID is empty");
@@ -416,7 +432,7 @@ void TrackService::loadSupplementary(
   }
 
   const QString trimmedTrackId =
-      trackId.trimmed();
+      cleanTrackId(trackId);
 
   if (trimmedTrackId.isEmpty()) {
     emit errorOccurred("Track ID is empty");
@@ -586,7 +602,7 @@ void TrackService::loadTrackLyrics(
   }
 
   const QString trimmedTrackId =
-      trackId.trimmed();
+      cleanTrackId(trackId);
 
   if (trimmedTrackId.isEmpty()) {
     emit errorOccurred("Track ID is empty");
@@ -813,7 +829,7 @@ void TrackService::loadSimilarTracks(
   }
 
   const QString trimmedTrackId =
-      trackId.trimmed();
+      cleanTrackId(trackId);
 
   if (trimmedTrackId.isEmpty()) {
     emit errorOccurred("Track ID is empty");
@@ -871,23 +887,19 @@ void TrackService::loadSimilarTracks(
         QJsonArray trackArray;
 
         if (resultVal.isArray()) {
-          trackArray =
-              resultVal.toArray();
+          trackArray = resultVal.toArray();
         } else if (resultVal.isObject()) {
-          const QJsonObject resultObj =
-              resultVal.toObject();
+          const QJsonObject resultObj = resultVal.toObject();
 
-          if (resultObj.contains(
-                  "similarTracks")) {
-            trackArray =
-                resultObj.value(
-                    "similarTracks")
-                    .toArray();
-          } else {
-            trackArray =
-                resultObj.value("tracks")
-                    .toArray();
+          if (resultObj.contains("similarTracks")) {
+            trackArray = resultObj.value("similarTracks").toArray();
+          } else if (resultObj.contains("tracks")) {
+            trackArray = resultObj.value("tracks").toArray();
           }
+        } else if (root.contains("similarTracks")) {
+          trackArray = root.value("similarTracks").toArray();
+        } else if (root.contains("tracks")) {
+          trackArray = root.value("tracks").toArray();
         }
 
         const QList<Track> tracks =
@@ -900,13 +912,14 @@ void TrackService::loadSimilarTracks(
       });
 }
 QString TrackService::lyricsSign(qint64 ts, const QString &trackId, const QString &format) {
-  // Подпись для /tracks/{id}/lyrics — как в клиентах Яндекса.
-  const QByteArray message =
-      QByteArray::number(ts) + trackId.toUtf8() + format.toUtf8() +
-      QByteArray(FileInfoSecret);
-  QMessageAuthenticationCode hmac(QCryptographicHash::Sha256, QByteArray(FileInfoSecret));
+  Q_UNUSED(format);
+  // Подпись для /tracks/{id}/lyrics по актуальному API Яндекс Музыки:
+  // Base64(HMAC-SHA256("{trackId}{timeStamp}", key "p93jhgh689SBReK6ghtw62"))
+  const QByteArray message = (trackId + QString::number(ts)).toUtf8();
+  const QByteArray key = "p93jhgh689SBReK6ghtw62";
+  QMessageAuthenticationCode hmac(QCryptographicHash::Sha256, key);
   hmac.addData(message);
-  return hmac.result().toBase64(QByteArray::OmitTrailingEquals);
+  return QString::fromLatin1(hmac.result().toBase64());
 }
 
 void TrackService::requestYandexLrc(
@@ -917,54 +930,109 @@ void TrackService::requestYandexLrc(
     if (onFail) onFail();
     return;
   }
-  const QString id = trackId.trimmed();
+  const QString id = cleanTrackId(trackId);
   if (id.isEmpty()) {
     if (onFail) onFail();
     return;
   }
 
-  const QString format = QStringLiteral("LRC");
-  const qint64 ts = QDateTime::currentSecsSinceEpoch();
-  const QString sign = lyricsSign(ts, id, format);
+  // Обработка ответа API текстов: скачивание по downloadUrl либо парсинг встроенных полей
+  auto processLyricsReply = [this, id, onOk, onFail](QNetworkReply *reply, const std::function<void()> &nextFallback) {
+    const QByteArray data = reply->readAll();
+    const bool ok = (reply->error() == QNetworkReply::NoError);
+    reply->deleteLater();
+    if (!ok || data.isEmpty()) {
+      if (nextFallback) nextFallback();
+      else if (onFail) onFail();
+      return;
+    }
 
-  QUrlQuery query;
-  query.addQueryItem("format", format);
-  query.addQueryItem("timeStamp", QString::number(ts));
-  query.addQueryItem("sign", sign);
+    QJsonParseError parseError;
+    const QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+      if (nextFallback) nextFallback();
+      else if (onFail) onFail();
+      return;
+    }
 
-  const QString path = QStringLiteral("/tracks/%1/lyrics?%2")
-                           .arg(id, query.toString(QUrl::FullyEncoded));
-  QNetworkReply *reply = m_yandexClient->get(path);
-  if (reply == nullptr) {
+    const QJsonObject result = unwrapResult(doc);
+    const QString downloadUrl = result.value("downloadUrl").toString().trimmed();
+    if (!downloadUrl.isEmpty()) {
+      // Скачиваем LRC/текст по downloadUrl
+      QNetworkRequest req((QUrl(downloadUrl)));
+      req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+      QNetworkReply *dlReply = m_publicNetwork->get(req);
+      connect(dlReply, &QNetworkReply::finished, this, [dlReply, onOk, nextFallback, onFail]() {
+        const QByteArray dlData = dlReply->readAll();
+        const bool dlOk = (dlReply->error() == QNetworkReply::NoError);
+        dlReply->deleteLater();
+        if (dlOk && !dlData.isEmpty()) {
+          const QString text = QString::fromUtf8(dlData).trimmed();
+          if (!text.isEmpty()) {
+            if (onOk) onOk(text);
+            return;
+          }
+        }
+        if (nextFallback) nextFallback();
+        else if (onFail) onFail();
+      });
+      return;
+    }
+
+    // Если downloadUrl нет, проверяем прямые поля lyrics / fullLyrics
+    const QString lrc = result.value("lyrics").toString().trimmed();
+    const QString full = result.value("fullLyrics").toString().trimmed();
+    const QString text = !lrc.isEmpty() ? lrc : full;
+    if (!text.isEmpty()) {
+      if (onOk) onOk(text);
+      return;
+    }
+
+    if (nextFallback) nextFallback();
+    else if (onFail) onFail();
+  };
+
+  // 1. Сначала пробуем format=LRC
+  const qint64 tsLrc = QDateTime::currentSecsSinceEpoch();
+  const QString signLrc = lyricsSign(tsLrc, id, QStringLiteral("LRC"));
+
+  QUrlQuery queryLrc;
+  queryLrc.addQueryItem("format", "LRC");
+  queryLrc.addQueryItem("timeStamp", QString::number(tsLrc));
+  queryLrc.addQueryItem("sign", signLrc);
+
+  const QString pathLrc = QStringLiteral("/tracks/%1/lyrics?%2").arg(id, queryLrc.toString(QUrl::FullyEncoded));
+  QNetworkReply *replyLrc = m_yandexClient->get(pathLrc);
+  if (replyLrc == nullptr) {
     if (onFail) onFail();
     return;
   }
 
-  connect(reply, &QNetworkReply::finished, this,
-          [this, reply, id, onOk, onFail]() {
-            const QByteArray data = reply->readAll();
-            const bool ok = (reply->error() == QNetworkReply::NoError);
-            reply->deleteLater();
-            if (!ok || data.isEmpty()) {
-              if (onFail) onFail();
-              return;
-            }
-            QJsonParseError parseError;
-            const QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
-            if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
-              if (onFail) onFail();
-              return;
-            }
-            const QJsonObject result = unwrapResult(doc);
-            const QString lrc = result.value("lyrics").toString().trimmed();
-            const QString full = result.value("fullLyrics").toString().trimmed();
-            const QString text = !lrc.isEmpty() ? lrc : full;
-            if (text.isEmpty()) {
-              if (onFail) onFail();
-              return;
-            }
-            if (onOk) onOk(text);
-          });
+  // 2. Фолбэк на format=TEXT при неудаче LRC
+  auto tryTextFormat = [this, id, onOk, onFail, processLyricsReply]() {
+    const qint64 tsText = QDateTime::currentSecsSinceEpoch();
+    const QString signText = lyricsSign(tsText, id, QStringLiteral("TEXT"));
+
+    QUrlQuery queryText;
+    queryText.addQueryItem("format", "TEXT");
+    queryText.addQueryItem("timeStamp", QString::number(tsText));
+    queryText.addQueryItem("sign", signText);
+
+    const QString pathText = QStringLiteral("/tracks/%1/lyrics?%2").arg(id, queryText.toString(QUrl::FullyEncoded));
+    QNetworkReply *replyText = m_yandexClient->get(pathText);
+    if (replyText == nullptr) {
+      if (onFail) onFail();
+      return;
+    }
+
+    connect(replyText, &QNetworkReply::finished, this, [replyText, onOk, onFail, processLyricsReply]() {
+      processLyricsReply(replyText, onFail);
+    });
+  };
+
+  connect(replyLrc, &QNetworkReply::finished, this, [replyLrc, processLyricsReply, tryTextFormat]() {
+    processLyricsReply(replyLrc, tryTextFormat);
+  });
 }
 
 namespace {
@@ -1174,7 +1242,7 @@ void TrackService::emitSupplement(const TrackSupplementary &supplement) {
 
 void TrackService::loadSyncLyrics(const QString &trackId, const QString &title,
                                   const QString &artist, qint64 durationMs) {
-  const QString id = trackId.trimmed();
+  const QString id = cleanTrackId(trackId);
   if (id.isEmpty()) {
     emit errorOccurred("Track ID is empty");
     return;
@@ -1197,7 +1265,10 @@ void TrackService::loadSyncLyrics(const QString &trackId, const QString &title,
       id,
       makeSupplement,
       [this, id, title, artist, durationSec, makeSupplement]() {
-        // Яндекса нет — пробуем публичную базу LRCLIB.
+        // Запрос к /lyrics не удался — пробуем /tracks/{id}/supplement
+        loadSupplementary(id);
+
+        // Параллельно пробуем публичную базу LRCLIB для получения синхронизированных таймкодов
         requestLrcLib(title, artist, durationSec, makeSupplement, [this, id]() {
           emit errorOccurred("Текст для трека не найден");
         });

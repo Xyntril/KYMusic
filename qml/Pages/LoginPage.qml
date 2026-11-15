@@ -1,5 +1,5 @@
 import QtQuick
-import QtQuick.Controls.Basic
+import QtQuick.Controls
 import QtQuick.Layouts
 import YaMusic 1.0
 
@@ -15,7 +15,7 @@ Item {
         Label {
             Layout.alignment: Qt.AlignHCenter
 
-            text: "Вход в YaMusic"
+            text: "Вход в KYMusic"
             font.pixelSize: 28
             font.bold: true
             color: AppTheme.textPrimary
@@ -34,6 +34,7 @@ Item {
             Layout.alignment: Qt.AlignHCenter
 
             text: "Войти через Яндекс"
+            icon.name: "globe"
 
             onClicked: {
                 Qt.openUrlExternally(
@@ -69,6 +70,8 @@ Item {
             Layout.alignment: Qt.AlignHCenter
 
             text: "Продолжить"
+            icon.name: "dialog-ok"
+            highlighted: true
             enabled: tokenField.text.trim().length > 0
 
             onClicked: {

@@ -5,6 +5,7 @@ Item {
     id: root
 
     property var controller
+    property var authController
 
     property string currentSection: "home"
     property string currentPageType: "section"
@@ -26,23 +27,38 @@ Item {
         ignoreUnknownSignals: true
 
         function onArtistPageRequested(artistId) {
+            if (typeof window !== "undefined" && window.activeOverlay === window.overlayLyrics) {
+                window.activeOverlay = window.overlayNone
+            }
             root.openArtistPage(artistId)
         }
 
         function onAlbumPageRequested(albumId) {
+            if (typeof window !== "undefined" && window.activeOverlay === window.overlayLyrics) {
+                window.activeOverlay = window.overlayNone
+            }
             root.openAlbumPage(albumId)
         }
 
         function onPlaylistPageRequested() {
+            if (typeof window !== "undefined" && window.activeOverlay === window.overlayLyrics) {
+                window.activeOverlay = window.overlayNone
+            }
             root.openPlaylistPage()
         }
 
         function onSearchPageRequested(query) {
+            if (typeof window !== "undefined" && window.activeOverlay === window.overlayLyrics) {
+                window.activeOverlay = window.overlayNone
+            }
             root.selectSection("search")
         }
     }
 
     function selectSection(section) {
+        if (typeof window !== "undefined" && window.activeOverlay === window.overlayLyrics) {
+            window.activeOverlay = window.overlayNone
+        }
         root.navigationStack = []
 
         root.currentSection = String(section || "home")
@@ -153,23 +169,21 @@ Item {
     }
 
     function requestPageLoad() {
-        let properties = { controller: root.controller }
+        let properties = {
+            controller: root.controller
+        }
 
         if (root.currentPageType === "genre") {
-            properties = {
-                controller: root.controller,
-                genreId: root.currentDetailId,
-                genreTitle: root.currentGenreTitle,
-                genreImage: root.currentGenreImage,
-                genreColor: root.currentGenreColor
-            }
+            properties.genreId = root.currentDetailId
+            properties.genreTitle = root.currentGenreTitle
+            properties.genreImage = root.currentGenreImage
+            properties.genreColor = root.currentGenreColor
         } else if (root.currentPageType === "station") {
-            properties = {
-                controller: root.controller,
-                stationType: root.currentStationType,
-                stationTag: root.currentStationTag,
-                stationTitle: root.currentGenreTitle
-            }
+            properties.stationType = root.currentStationType
+            properties.stationTag = root.currentStationTag
+            properties.stationTitle = root.currentGenreTitle
+        } else if (root.currentPageType === "section" && root.currentSection === "settings") {
+            properties.authController = root.authController
         }
 
         root.pageLoadRequested(root.pageSourceForCurrentPage(), properties)
@@ -202,8 +216,9 @@ Item {
             case "wave":
                 return "../Pages/MyWavePage.qml"
             case "library":
-            case "liked":
                 return "../Pages/LibraryPage.qml"
+            case "liked":
+                return "../Pages/LikedTracksPage.qml"
             case "playlists":
                 return "../Pages/PlaylistsPage.qml"
             case "releases":
@@ -228,9 +243,8 @@ Item {
     function contextTypeForCurrentPage() {
         switch (root.currentPageType) {
             case "artist":
-                return "artist"
             case "album":
-                return "album"
+                return ""
             case "playlist":
                 return "playlist"
             case "genre":

@@ -33,6 +33,7 @@ public:
   Track trackAt(int index) const;
   QList<Track> tracks() const;
   int count() const;
+  Q_INVOKABLE QVariantMap get(int index) const;
 
   // Индекс трека в исходном списке (до фильтрации); -1, если трек скрыт.
   int sourceIndex(int index) const;

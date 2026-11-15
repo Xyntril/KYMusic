@@ -1,11 +1,12 @@
 import QtQuick
-import QtQuick.Controls.Basic
+import QtQuick.Controls
 import YaMusic 1.0
 
 Item {
     id: root
 
     property var controller
+    property string filterText: ""
 
     PlaylistPicker {
         id: addToPlaylistPopup
@@ -31,10 +32,7 @@ Item {
                 spacing: 10
 
                 Label {
-                    text: root.controller && root.controller.currentPlaylistTitle
-                        ? root.controller.currentPlaylistTitle
-                        : qsTr("Плейлист")
-
+                    text: qsTr("Треки")
                     color: AppTheme.textPrimary
                     font.pixelSize: 18
                     font.bold: true
@@ -66,14 +64,26 @@ Item {
                     ? root.controller.playlistModel
                     : null
 
-                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                ScrollBar.vertical: ScrollBar {
+                    policy: ScrollBar.AsNeeded
+                    width: (typeof window !== "undefined" && window.isMobileMode) ? 3 : 10
+                    opacity: (typeof window !== "undefined" && window.isMobileMode) ? (active ? 0.5 : 0) : 1
+                    Behavior on opacity { NumberAnimation { duration: 150 } }
+                }
 
                 delegate: TrackRow {
+                    readonly property bool matchesFilter: root.filterText.length === 0 ||
+                        (model.title && model.title.toLowerCase().indexOf(root.filterText.toLowerCase()) !== -1) ||
+                        (model.artist && model.artist.toLowerCase().indexOf(root.filterText.toLowerCase()) !== -1)
+
+                    visible: matchesFilter
+                    height: matchesFilter ? 62 : 0
+
                     width: tracksView.width -
                         (tracksView.ScrollBar.vertical.visible ? 10 : 0)
 
                     controller: root.controller
-                    rowIndex: model.index
+                    rowIndex: index
                     trackId: model.trackId
                     title: model.title
                     artist: model.artist
@@ -89,7 +99,7 @@ Item {
                     showAdd: true
                     showRemove: root.controller && root.controller.currentPlaylistKind > 0
 
-                    onActivated: root.controller.selectPlaylistTrack(model.index)
+                    onActivated: root.controller.selectPlaylistTrack(index)
                     onRemoveRequested: function(i) {
                         if (root.controller) {
                             root.controller.removeTrackFromPlaylist(i)

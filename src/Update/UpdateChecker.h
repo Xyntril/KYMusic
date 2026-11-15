@@ -56,7 +56,7 @@ private:
 
   QNetworkAccessManager *m_network = nullptr;
   QPointer<QNetworkReply> m_reply;
-  QString m_repository = QStringLiteral("andfriden/YaMusic");
+  QString m_repository = QStringLiteral("Xyntril/KYMusic");
   QString m_currentVersion;
   ReleaseInfo m_release;
   bool m_checking = false;

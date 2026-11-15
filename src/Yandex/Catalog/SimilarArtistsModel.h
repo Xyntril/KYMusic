@@ -10,6 +10,7 @@
 
 class SimilarArtistsModel : public QAbstractListModel {
   Q_OBJECT
+  Q_PROPERTY(int count READ count NOTIFY countChanged)
 
 public:
   enum Roles { IdRole = Qt::UserRole + 1, NameRole, CoverUriRole };
@@ -25,6 +26,9 @@ public:
   Artist artistAt(int index) const;
   QList<Artist> artists() const;
   int count() const;
+
+signals:
+  void countChanged();
 
 private:
   QList<Artist> m_artists;

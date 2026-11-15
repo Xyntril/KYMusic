@@ -70,6 +70,7 @@ public:
       const QString &sourceType = {});
 
   void playQueue();
+  bool playQueueTrack(int index);
   void playCurrent();
 
   void pause();
@@ -103,6 +104,7 @@ signals:
   void repeatModeChanged();
   void shuffleChanged();
   void streamQualityInfoChanged();
+  void raiseRequested();
 
 private:
   void setState(PlaybackState state);

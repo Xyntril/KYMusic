@@ -17,6 +17,7 @@ LyricsController::LyricsController(TrackService *trackService,
     m_currentLyricLine = -1;
     emit lyricsChanged();
     emit currentLyricLineChanged();
+    loadLyrics();
   });
 
   connect(m_trackService, &TrackService::supplementReceived, this,
@@ -76,6 +77,19 @@ QString LyricsController::lyricLineText(int index) const {
   return m_supplementary.lines.at(index).text;
 }
 
+qint64 LyricsController::lyricLineTimestamp(int index) const {
+  if (index < 0 || index >= m_supplementary.lines.size()) return 0;
+  return m_supplementary.lines.at(index).timestampMs;
+}
+
+void LyricsController::seekToLine(int index) {
+  if (index < 0 || index >= m_supplementary.lines.size()) return;
+  const qint64 targetMs = m_supplementary.lines.at(index).timestampMs;
+  if (m_playerService != nullptr) {
+    m_playerService->seek(targetMs);
+  }
+}
+
 void LyricsController::updateCurrentLyricLine() {
   if (!m_supplementary.hasTimedLines()) {
     if (m_currentLyricLine != -1) {
@@ -87,10 +101,13 @@ void LyricsController::updateCurrentLyricLine() {
 
   const qint64 pos = m_playerService->position();
   const QList<LyricLine> &lines = m_supplementary.lines;
-  int index = 0;
+  int index = -1;
 
-  while (index < lines.size() - 1 && lines.at(index + 1).timestampMs <= pos)
-    ++index;
+  if (!lines.isEmpty() && pos >= lines.first().timestampMs) {
+    index = 0;
+    while (index < lines.size() - 1 && lines.at(index + 1).timestampMs <= pos)
+      ++index;
+  }
 
   if (index != m_currentLyricLine) {
     m_currentLyricLine = index;

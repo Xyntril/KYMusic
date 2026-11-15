@@ -38,6 +38,8 @@ class LibraryController : public QObject {
 
   Q_PROPERTY(bool loadingPlaylist READ isLoadingPlaylist NOTIFY loadingPlaylistChanged)
 
+  Q_PROPERTY(QString currentPlaylistUid READ currentPlaylistUid NOTIFY currentPlaylistChanged)
+
   Q_PROPERTY(QString currentPlaylistTitle READ currentPlaylistTitle NOTIFY currentPlaylistChanged)
 
   Q_PROPERTY(
@@ -114,6 +116,8 @@ public:
   QString currentPlaylistCoverUri() const;
 
   int currentPlaylistTrackCount() const;
+
+  QString currentPlaylistUid() const;
 
   int currentPlaylistKind() const;
 
@@ -219,6 +223,8 @@ private:
   bool m_loadingLikedArtists = false;
 
   bool m_loadingPlaylist = false;
+
+  QString m_currentPlaylistUid;
 
   QString m_currentPlaylistTitle;
 

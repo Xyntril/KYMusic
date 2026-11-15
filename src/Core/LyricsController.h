@@ -34,6 +34,8 @@ public:
 
   // Текст строки по индексу (для построчного вывода)
   Q_INVOKABLE QString lyricLineText(int index) const;
+  Q_INVOKABLE qint64 lyricLineTimestamp(int index) const;
+  Q_INVOKABLE void seekToLine(int index);
 
 signals:
   void lyricsChanged();

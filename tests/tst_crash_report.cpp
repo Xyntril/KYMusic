@@ -125,7 +125,7 @@ void CrashReportTest::issueUrlCarriesReport() {
   const QString url = CrashReporterDetail::issueUrl(
       QStringLiteral("Падение: SIGSEGV (версия 0.14.1)"), QStringLiteral("Причина: SIGSEGV"));
 
-  QVERIFY(url.startsWith(QStringLiteral("https://github.com/andfriden/YaMusic/issues/new?")));
+  QVERIFY(url.startsWith(QStringLiteral("https://github.com/Xyntril/KYMusic/issues/new?")));
   QVERIFY(url.contains(QStringLiteral("title=")));
   QVERIFY(url.contains(QStringLiteral("body=")));
   QVERIFY(!url.contains(QLatin1Char(' ')));

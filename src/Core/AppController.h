@@ -212,6 +212,7 @@ public:
   Q_INVOKABLE void selectSearchPlaylist(int index);
   Q_INVOKABLE void loadMoreSearchResults();
   Q_INVOKABLE void selectSimilarTrack(int index);
+  Q_INVOKABLE void playStatsTrack(int index);
   Q_INVOKABLE void loadMoreGenreStation();
   Q_INVOKABLE void selectGenreStationTrack(int index);
   Q_INVOKABLE void createPlaylist(const QString &title);
@@ -248,6 +249,12 @@ public:
   Q_INVOKABLE void setVolume(float volume);
 
   Q_INVOKABLE void copyTrack(const QString &title, const QString &artist);
+  Q_INVOKABLE void copyCurrentTrackTitle();
+
+  Q_INVOKABLE void showAboutAppDialog();
+  Q_INVOKABLE void showAboutKdeDialog();
+  Q_INVOKABLE void openSettings();
+  Q_INVOKABLE void logout();
 
   // Запускает скачивание текущего воспроизводимого трека
   // в «Загрузки» с тегами и вложенным артворком.
@@ -259,6 +266,13 @@ public:
                                  const QString &artist, const QString &album,
                                  const QString &coverUri, int durationMs);
 
+  Q_INVOKABLE bool isTrackCached(const QString &trackId) const;
+  Q_INVOKABLE void downloadPlaylistTracks();
+  Q_INVOKABLE void downloadLikedTracks();
+  Q_INVOKABLE void downloadAlbumTracks();
+  Q_INVOKABLE void startPlaylistWave(const QString &uid, int kind, const QString &title = QString());
+  Q_INVOKABLE void startCollectionWave();
+
   DownloadService *downloadService() const;
 
   QString playbackSourceTitle() const;
@@ -266,6 +280,7 @@ public:
   int queueCount() const;
   int queueCurrentIndex() const;
   Q_INVOKABLE QVariantMap queueTrackData(int index) const;
+  Q_INVOKABLE void selectQueueTrack(int index);
 
   QString currentCodec() const;
   int currentBitrate() const;
@@ -299,6 +314,7 @@ public:
   PlaybackSettingsController *playbackSettingsController() const;
   AudioQualityController *audioQualityController() const;
   StatsController *statsController() const;
+  PlaybackController *playbackController() const;
 
   bool isSearching() const;
   bool isPlaying() const;
@@ -372,6 +388,7 @@ public:
 
 signals:
   void statusChanged(const QString &message);
+  void settingsRequested();
   void artistPageRequested(const QString &artistId);
   void albumPageRequested(const QString &albumId);
   void playlistPageRequested();
@@ -421,6 +438,7 @@ signals:
   void queueChanged();
 
   void streamQualityInfoChanged();
+  void raiseRequested();
 
 private:
   void connectAccount();

@@ -1,4 +1,5 @@
 #include "PlaybackController.h"
+#include <QCoreApplication>
 
 #include "../Core/AudioQualityController.h"
 #include "../MediaControls/MediaControlsFactory.h"
@@ -131,6 +132,8 @@ PlaybackController::PlaybackController(
       &PlayerService::playbackStopped,
       this,
       [this]() {
+        if (m_crossfading) return;
+        if (m_queueService && m_queueService->repeatMode() == QueueService::RepeatOne) return;
         setState(Stopped);
       });
 
@@ -195,7 +198,13 @@ PlaybackController::PlaybackController(
       m_queueService,
       &QueueService::repeatModeChanged,
       this,
-      &PlaybackController::repeatModeChanged);
+      [this]() {
+        if (m_queueService->repeatMode() == QueueService::RepeatOne) {
+          resetCrossfadeStream();
+        }
+        updatePreloadWindow();
+        emit repeatModeChanged();
+      });
 
   connect(
       m_queueService,
@@ -268,7 +277,9 @@ void PlaybackController::playTrack(const Track &track) {
 
   for (int i = 0; i < queueTracks.size(); ++i) {
     if (queueTracks.at(i).id == track.id) {
-      m_queueService->setCurrentIndex(i);
+      if (m_queueService->currentIndex() != i) {
+        m_queueService->setCurrentIndex(i);
+      }
       break;
     }
   }
@@ -314,7 +325,7 @@ void PlaybackController::playTrack(const Track &track) {
   // цензурная копия.
   const QString cachedPath = m_preloader != nullptr ? m_preloader->cachedPath(track) : QString();
 
-  if (!cachedPath.isEmpty()) {
+  if (!cachedPath.isEmpty() && QFile::exists(cachedPath)) {
     playCachedFile(track, cachedPath);
     updatePreloadWindow();
     return;
@@ -367,6 +378,16 @@ void PlaybackController::playQueue() {
   }
 
   playTrack(track);
+}
+
+bool PlaybackController::playQueueTrack(int index) {
+  if (m_queueService == nullptr) {
+    return false;
+  }
+  if (!m_queueService->setCurrentIndex(index)) {
+    return false;
+  }
+  return playQueueCurrentTrack();
 }
 
 void PlaybackController::playCurrent() {
@@ -582,6 +603,14 @@ void PlaybackController::releaseStaleProxies() {
 }
 
 void PlaybackController::playCachedFile(const Track &track, const QString &path) {
+  if (!QFile::exists(path)) {
+    const QString quality = m_qualityController != nullptr
+        ? m_qualityController->quality()
+        : QStringLiteral("lossless");
+    m_trackService->loadStreamInfo(track.id, quality);
+    return;
+  }
+
   const QString identity = TrackCache::identityFor(track.id);
 
   // Отметка «играли»: по времени файла кэш решает, что вытеснять.
@@ -590,12 +619,23 @@ void PlaybackController::playCachedFile(const Track &track, const QString &path)
   m_trackCache->loadMeta(identity, &m_currentCodec, &m_currentBitrate);
   emit streamQualityInfoChanged();
 
+  // Убеждаемся, что m_currentTrack имеет чистый числовой ID и обновляет UI
+  Track cleanTrack = track;
+  cleanTrack.id = identity;
+  m_currentTrack = cleanTrack;
+  emit currentTrackChanged();
+
   m_playerService->setTrackDuration(track.durationMs);
   m_playerService->playUrl(QUrl::fromLocalFile(path).toString());
 }
 
 void PlaybackController::updatePreloadWindow() {
   if (m_preloader == nullptr) return;
+
+  if (m_queueService->repeatMode() == QueueService::RepeatOne) {
+    m_preloader->setUpcoming({});
+    return;
+  }
 
   const QList<Track> queueTracks = m_queueService->tracks();
   const int currentIndex = m_queueService->currentIndex();
@@ -632,8 +672,11 @@ void PlaybackController::checkCrossfade() {
   const int fadeMs = m_playerService->crossfadeMs();
 
   if (fadeMs <= 0) return;
-  // Повтор одного трека перехода не предполагает.
-  if (m_queueService->repeatMode() == QueueService::RepeatOne) return;
+  // Повтор одного трека перехода не предполагает: сбрасываем незавершённые стримы.
+  if (m_queueService->repeatMode() == QueueService::RepeatOne) {
+    resetCrossfadeStream();
+    return;
+  }
   if (!m_queueService->hasNext()) return;
 
   const qint64 duration = m_playerService->duration();
@@ -828,6 +871,17 @@ void PlaybackController::handlePlaybackFinished() {
       m_queueService->repeatMode();
 
   if (mode == QueueService::RepeatOne) {
+    resetCrossfadeStream();
+    if (!m_currentTrack.id.isEmpty()) {
+      m_playerService->repeatCurrentTrack();
+      setState(Playing);
+      if (m_systemMediaControls) {
+        m_systemMediaControls->setPlaybackStatus(
+            SystemMediaControls::PlaybackStatus::Playing);
+        m_systemMediaControls->setPosition(0);
+      }
+      return;
+    }
     if (playQueueCurrentTrack())
       return;
 
@@ -980,6 +1034,52 @@ void PlaybackController::setupSystemMediaControls() {
       });
 
   connect(
+      m_playerService,
+      &PlayerService::positionChanged,
+      this,
+      [this](qint64 position) {
+        if (m_systemMediaControls) {
+          m_systemMediaControls->setPosition(position);
+        }
+      });
+
+  connect(
+      m_systemMediaControls.get(),
+      &SystemMediaControls::setLoopStatusRequested,
+      this,
+      [this](const QString &status) {
+        if (status == QLatin1String("Track")) {
+          setRepeatMode(QueueService::RepeatOne);
+        } else if (status == QLatin1String("Playlist")) {
+          setRepeatMode(QueueService::RepeatAll);
+        } else {
+          setRepeatMode(QueueService::RepeatOff);
+        }
+      });
+
+  connect(
+      m_systemMediaControls.get(),
+      &SystemMediaControls::setShuffleRequested,
+      this,
+      [this](bool enabled) {
+        setShuffleEnabled(enabled);
+      });
+
+  connect(
+      m_systemMediaControls.get(),
+      &SystemMediaControls::raiseRequested,
+      this,
+      &PlaybackController::raiseRequested);
+
+  connect(
+      m_systemMediaControls.get(),
+      &SystemMediaControls::quitRequested,
+      this,
+      []() {
+        QCoreApplication::quit();
+      });
+
+  connect(
       this,
       &PlaybackController::currentTrackChanged,
       this,
@@ -1002,6 +1102,12 @@ void PlaybackController::setupSystemMediaControls() {
       &PlaybackController::stateChanged,
       this,
       [this]() {
+        if (m_crossfading) {
+          m_systemMediaControls->setPlaybackStatus(
+              SystemMediaControls::PlaybackStatus::Playing);
+          return;
+        }
+
         switch (m_state) {
         case Playing:
           m_systemMediaControls->setPlaybackStatus(
@@ -1014,6 +1120,11 @@ void PlaybackController::setupSystemMediaControls() {
           break;
 
         default:
+          if (m_queueService && m_queueService->repeatMode() == QueueService::RepeatOne && !m_currentTrack.id.isEmpty()) {
+            m_systemMediaControls->setPlaybackStatus(
+                SystemMediaControls::PlaybackStatus::Playing);
+            break;
+          }
           m_systemMediaControls->setPlaybackStatus(
               SystemMediaControls::PlaybackStatus::Stopped);
           break;

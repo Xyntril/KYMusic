@@ -41,6 +41,10 @@ signals:
   void nextRequested();
   void previousRequested();
   void seekRequested(qint64 positionMs);
+  void setLoopStatusRequested(const QString &loopStatus);
+  void setShuffleRequested(bool enabled);
+  void raiseRequested();
+  void quitRequested();
 
 protected:
   virtual void platformSetEnabled(bool enabled) = 0;

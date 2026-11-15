@@ -224,8 +224,14 @@ bool CoverImageProvider::isCircularRequest(const QString &id) const {
 QString CoverImageProvider::stripRequestPrefix(QString id) const {
   const QString prefix = QString::fromLatin1(kCirclePrefix);
 
+  while (id.startsWith(QLatin1Char('/'))) {
+    id.remove(0, 1);
+  }
   if (id.startsWith(prefix)) {
     id.remove(0, prefix.size());
+  }
+  while (id.startsWith(QLatin1Char('/'))) {
+    id.remove(0, 1);
   }
   return id;
 }
@@ -239,13 +245,23 @@ QString CoverImageProvider::createUrl(QString uri) const {
   // сначала раскодируем процентное экранирование.
   QString normalized = QUrl::fromPercentEncoding(uri.toUtf8());
   normalized = normalized.trimmed();
+  while (normalized.startsWith(QLatin1Char('/'))) {
+    normalized.remove(0, 1);
+  }
 
   // Яндекс Музыка использует %% как плейсхолдер размера картинки.
-  normalized.replace("%%", "200x200");
+  normalized.replace("%%", "400x400");
 
   // Также обрабатываем закодированную форму на случай,
   // если сюда пришло значение без декодирования выше.
-  normalized.replace("%25%25", "200x200");
+  normalized.replace("%25%25", "400x400");
+
+  if (normalized.startsWith(QLatin1String("https:/")) && !normalized.startsWith(QLatin1String("https://"))) {
+    normalized.replace(0, 7, QLatin1String("https://"));
+  }
+  if (normalized.startsWith(QLatin1String("http:/")) && !normalized.startsWith(QLatin1String("http://"))) {
+    normalized.replace(0, 6, QLatin1String("http://"));
+  }
 
   if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
     return normalized;

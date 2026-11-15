@@ -7,6 +7,7 @@ void AppController::loadLibrary() {
   }
 
   m_libraryController->loadUserPlaylists(m_accountUid);
+  m_libraryController->loadLikedTracks(m_accountUid);
   m_libraryController->loadLikedAlbums(m_accountUid);
   m_libraryController->loadLikedArtists(m_accountUid);
 }
@@ -34,6 +35,9 @@ void AppController::loadLikedTracks() {
 }
 
 void AppController::selectLikedTrack(int index) {
+  if (m_personalController != nullptr) {
+    m_personalController->deactivateMyWave();
+  }
   m_libraryController->selectLikedTrack(index);
 }
 

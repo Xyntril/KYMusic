@@ -46,7 +46,7 @@ void AppController::cycleRepeat() {
 }
 
 void AppController::setRepeatMode(int mode) {
-  if (mode < QueueService::RepeatOff || mode > QueueService::RepeatOne) {
+  if (mode < QueueService::RepeatOff || mode > QueueService::RepeatAll) {
     return;
   }
 

@@ -101,6 +101,11 @@ void PersonalController::connectPlayback() {
             if (!m_myWaveQueueActive)
               return;
 
+            QueueService *queue = m_playbackController->queueService();
+            if (queue != nullptr && queue->repeatMode() == QueueService::RepeatOne) {
+              return;
+            }
+
             if (m_currentMyWaveTrackId.isEmpty())
               return;
 

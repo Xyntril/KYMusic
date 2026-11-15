@@ -80,12 +80,18 @@ CMakeLists.txt.user*
 .pch/
 .rcc/
 .uic/
+build/
 /build*/
 cmake-build-*/
 /.qtcreator/
 .idea/
+.cache/
+/.cache/
 
 # Packaging
+.tools/
 /.tools/
 /build/appdir/
 *.AppImage
+dist/
+pkg/

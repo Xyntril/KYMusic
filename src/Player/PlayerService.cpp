@@ -247,12 +247,16 @@ void PlayerService::playOnActiveVoice(const QString &url, QIODevice *device) {
       m_sourceDevice = device;
 
     player.setSourceDevice(device);
+    player.setPosition(0);
     applyVolume();
     player.play();
     return;
   }
 
-  if (m_currentUrl != url) {
+  const bool isSameUrl = (m_currentUrl == url && !url.isEmpty());
+  const bool isEndOfMedia = (player.mediaStatus() == QMediaPlayer::EndOfMedia);
+
+  if (!isSameUrl || isEndOfMedia) {
     m_currentUrl = url;
 
     if (m_secondVoiceActive)
@@ -264,6 +268,7 @@ void PlayerService::playOnActiveVoice(const QString &url, QIODevice *device) {
     emit currentUrlChanged();
   }
 
+  player.setPosition(0);
   applyVolume();
   player.play();
 }
@@ -294,6 +299,22 @@ void PlayerService::stop() {
   m_sourceDevice.clear();
   m_secondSourceDevice.clear();
   applyVolume();
+}
+
+void PlayerService::repeatCurrentTrack() {
+  m_fadeTimer.stop();
+  m_fading = false;
+  m_fadeElapsedMs = 0;
+
+  QMediaPlayer &player = activePlayer();
+  QIODevice *dev = m_secondVoiceActive ? m_secondSourceDevice.data() : m_sourceDevice.data();
+  if (dev != nullptr && !dev->isSequential()) {
+    dev->seek(0);
+  }
+  player.setPosition(0);
+  applyVolume();
+  player.play();
+  emit playbackStarted();
 }
 
 void PlayerService::togglePlayback() {

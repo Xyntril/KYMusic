@@ -2,6 +2,7 @@
 #include "../Auth/YandexAuth.h"
 #include "../Parsers.h"
 #include "../YandexClient.h"
+#include <QDebug>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -10,8 +11,25 @@
 namespace {
 Playlist parsePlaylist(const QJsonObject &object) {
   Playlist playlist;
-  playlist.uid = QString::number(object.value("uid").toInteger());
-  playlist.kind = object.value("kind").toInt();
+  if (object.value("uid").isString()) {
+    playlist.uid = object.value("uid").toString().trimmed();
+  } else if (object.value("uid").isDouble()) {
+    playlist.uid = QString::number(object.value("uid").toInteger());
+  }
+  if (playlist.uid.isEmpty() || playlist.uid == "0") {
+    const QJsonObject owner = object.value("owner").toObject();
+    if (owner.value("uid").isString()) {
+      playlist.uid = owner.value("uid").toString().trimmed();
+    } else if (owner.value("uid").isDouble()) {
+      playlist.uid = QString::number(owner.value("uid").toInteger());
+    }
+  }
+
+  if (object.value("kind").isDouble()) {
+    playlist.kind = object.value("kind").toInt();
+  } else if (object.value("kind").isString()) {
+    playlist.kind = object.value("kind").toString().trimmed().toInt();
+  }
   playlist.uuid = object.value("playlistUuid").toString();
 
   if (playlist.uuid.isEmpty()) {
@@ -22,8 +40,7 @@ Playlist parsePlaylist(const QJsonObject &object) {
   playlist.description = object.value("description").toString();
   playlist.trackCount = object.value("trackCount").toInt();
   playlist.revision = object.value("revision").toInt();
-  const QJsonObject cover = object.value("cover").toObject();
-  playlist.coverUri = cover.value("uri").toString();
+  playlist.coverUri = ::parseCoverUri(object);
   const QJsonArray tracks = object.value("tracks").toArray();
 
   for (const QJsonValue &value : tracks) {
@@ -41,6 +58,10 @@ Playlist parsePlaylist(const QJsonObject &object) {
     if (!track.id.isEmpty()) {
       playlist.tracks.append(track);
     }
+  }
+
+  if (playlist.coverUri.isEmpty() && !playlist.tracks.isEmpty()) {
+    playlist.coverUri = playlist.tracks.first().coverUri;
   }
 
   return playlist;
@@ -76,22 +97,69 @@ PersonalPlaylist parseUserPlaylist(const QJsonObject &object) {
     }
   }
 
-  playlist.uid = QString::number(object.value("uid").toInteger());
-  playlist.kind = object.value("kind").toInt();
+  if (object.value("uid").isString()) {
+    playlist.uid = object.value("uid").toString().trimmed();
+  } else if (object.value("uid").isDouble()) {
+    playlist.uid = QString::number(object.value("uid").toInteger());
+  }
+  if (playlist.uid.isEmpty() || playlist.uid == "0") {
+    const QJsonObject owner = object.value("owner").toObject();
+    if (owner.value("uid").isString()) {
+      playlist.uid = owner.value("uid").toString().trimmed();
+    } else if (owner.value("uid").isDouble()) {
+      playlist.uid = QString::number(owner.value("uid").toInteger());
+    }
+  }
+
+  if (object.value("kind").isDouble()) {
+    playlist.kind = object.value("kind").toInt();
+  } else if (object.value("kind").isString()) {
+    playlist.kind = object.value("kind").toString().trimmed().toInt();
+  }
   playlist.revision = object.value("revision").toInt();
   playlist.title = object.value("title").toString();
   playlist.description = object.value("description").toString();
   playlist.previewDescription = object.value("description").toString();
   playlist.trackCount = object.value("trackCount").toInt();
   playlist.generatedPlaylistType = object.value("generatedPlaylistType").toString();
-  playlist.coverUri = object.value("cover").toObject().value("uri").toString();
+  playlist.coverUri = ::parseCoverUri(object);
+  if (playlist.coverUri.isEmpty()) {
+    const QJsonArray tracks = object.value("tracks").toArray();
+    for (const QJsonValue &val : tracks) {
+      if (!val.isObject()) continue;
+      const QJsonObject wrapper = val.toObject();
+      const QJsonObject trackObj = wrapper.contains("track") ? wrapper.value("track").toObject() : wrapper;
+      const QString trackCover = ::parseCoverUri(trackObj);
+      if (!trackCover.isEmpty()) {
+        playlist.coverUri = trackCover;
+        break;
+      }
+    }
+  }
   return playlist;
 }
 
 Playlist parseSimilarPlaylist(const QJsonObject &object) {
   Playlist playlist;
-  playlist.uid = QString::number(object.value("uid").toInteger());
-  playlist.kind = object.value("kind").toInt();
+  if (object.value("uid").isString()) {
+    playlist.uid = object.value("uid").toString().trimmed();
+  } else if (object.value("uid").isDouble()) {
+    playlist.uid = QString::number(object.value("uid").toInteger());
+  }
+  if (playlist.uid.isEmpty() || playlist.uid == "0") {
+    const QJsonObject owner = object.value("owner").toObject();
+    if (owner.value("uid").isString()) {
+      playlist.uid = owner.value("uid").toString().trimmed();
+    } else if (owner.value("uid").isDouble()) {
+      playlist.uid = QString::number(owner.value("uid").toInteger());
+    }
+  }
+
+  if (object.value("kind").isDouble()) {
+    playlist.kind = object.value("kind").toInt();
+  } else if (object.value("kind").isString()) {
+    playlist.kind = object.value("kind").toString().trimmed().toInt();
+  }
   playlist.uuid = object.value("playlistUuid").toString();
 
   if (playlist.uuid.isEmpty()) {
@@ -99,11 +167,7 @@ Playlist parseSimilarPlaylist(const QJsonObject &object) {
   }
 
   playlist.title = object.value("title").toString();
-  playlist.coverUri = object.value("cover").toObject().value("uri").toString();
-
-  if (playlist.coverUri.isEmpty()) {
-    playlist.coverUri = object.value("coverUri").toString();
-  }
+  playlist.coverUri = ::parseCoverUri(object);
 
   return playlist;
 }
@@ -137,6 +201,9 @@ void PlaylistService::loadPlaylist(const QString &uid, int kind) {
 
   if (m_playlistCache.get(cacheKey, cached)) {
     emit playlistReceived(cached);
+    if (!cached.coverUri.isEmpty()) {
+      emit playlistCoverUpdated(cached.kind, cached.coverUri);
+    }
     return;
   }
 
@@ -171,6 +238,9 @@ void PlaylistService::loadPlaylist(const QString &uid, int kind) {
 
     m_playlistCache.put(cacheKey, playlist);
     emit playlistReceived(playlist);
+    if (!playlist.coverUri.isEmpty()) {
+      emit playlistCoverUpdated(playlist.kind, playlist.coverUri);
+    }
     reply->deleteLater();
   });
 }
@@ -281,7 +351,7 @@ void PlaylistService::loadUserPlaylists(const QString &uid) {
     return;
   }
 
-  connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+  connect(reply, &QNetworkReply::finished, this, [this, reply, trimmedUid]() {
     const QByteArray data = reply->readAll();
 
     if (reply->error() != QNetworkReply::NoError) {
@@ -321,12 +391,61 @@ void PlaylistService::loadUserPlaylists(const QString &uid) {
 
     for (const QJsonValue &value : playlistArray) {
       if (!value.isObject()) continue;
-      const PersonalPlaylist playlist = parseUserPlaylist(value.toObject());
+      PersonalPlaylist playlist = parseUserPlaylist(value.toObject());
+      if (playlist.uid.isEmpty() || playlist.uid == "0") {
+        playlist.uid = trimmedUid;
+      }
       if (playlist.uid.isEmpty() || playlist.kind <= 0) continue;
       playlists.append(playlist);
     }
 
     emit userPlaylistsReceived(playlists);
+
+    // Если у пользовательского плейлиста нет обложки, но есть треки — подгружаем
+    // состав плейлиста и берём обложку первого трека
+    for (const PersonalPlaylist &p : playlists) {
+      if (p.coverUri.isEmpty() && p.trackCount > 0) {
+        const QString pUid = (!p.uid.isEmpty() && p.uid != "0") ? p.uid : trimmedUid;
+        const int pKind = p.kind;
+        const auto pPath = QStringLiteral("/users/%1/playlists/%2").arg(pUid).arg(pKind);
+        qDebug() << "[PlaylistService] Fetching playlist cover for kind:" << pKind << "path:" << pPath;
+        QNetworkReply *pReply = m_yandexClient->get(pPath);
+        if (pReply != nullptr) {
+          connect(pReply, &QNetworkReply::finished, this, [this, pReply, pKind]() {
+            if (pReply->error() == QNetworkReply::NoError) {
+              const QByteArray pData = pReply->readAll();
+              QJsonParseError pErr;
+              const QJsonDocument pDoc = QJsonDocument::fromJson(pData, &pErr);
+              if (pErr.error == QJsonParseError::NoError && pDoc.isObject()) {
+                QJsonObject pObj = pDoc.object();
+                if (pObj.contains("result") && pObj.value("result").isObject()) {
+                  pObj = pObj.value("result").toObject();
+                }
+                QString foundCover = ::parseCoverUri(pObj);
+                if (foundCover.isEmpty()) {
+                  const QJsonArray pTracks = pObj.value("tracks").toArray();
+                  for (const QJsonValue &v : pTracks) {
+                    if (!v.isObject()) continue;
+                    const QJsonObject wrapper = v.toObject();
+                    const QJsonObject trackObj = wrapper.contains("track") ? wrapper.value("track").toObject() : wrapper;
+                    foundCover = ::parseCoverUri(trackObj);
+                    if (!foundCover.isEmpty()) {
+                      break;
+                    }
+                  }
+                }
+                if (!foundCover.isEmpty()) {
+                  qDebug() << "[PlaylistService] Found cover for playlist kind:" << pKind << "coverUri:" << foundCover;
+                  emit playlistCoverUpdated(pKind, foundCover);
+                }
+              }
+            }
+            pReply->deleteLater();
+          });
+        }
+      }
+    }
+
     reply->deleteLater();
   });
 }

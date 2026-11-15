@@ -10,6 +10,7 @@
 
 class ArtistAlbumsModel : public QAbstractListModel {
   Q_OBJECT
+  Q_PROPERTY(int count READ count NOTIFY countChanged)
 
 public:
   enum Roles { IdRole = Qt::UserRole + 1, TitleRole, CoverUriRole, YearRole, TypeRole };
@@ -25,6 +26,9 @@ public:
   Album albumAt(int index) const;
   QList<Album> albums() const;
   int count() const;
+
+signals:
+  void countChanged();
 
 private:
   QList<Album> m_albums;

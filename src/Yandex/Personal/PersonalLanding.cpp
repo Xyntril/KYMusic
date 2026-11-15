@@ -190,11 +190,7 @@ PersonalPlaylist PersonalLanding::parsePersonalPlaylist(const PersonalLandingIte
     playlist.id = item.id;
   }
 
-  playlist.coverUri = object.value("coverUri").toString();
-
-  if (playlist.coverUri.isEmpty()) {
-    playlist.coverUri = object.value("cover").toObject().value("uri").toString();
-  }
+  playlist.coverUri = ::parseCoverUri(object);
 
   return playlist;
 }
@@ -297,7 +293,7 @@ void PersonalLanding::loadWheel() {
       } else if (type.compare(QLatin1String("track"), Qt::CaseInsensitive) == 0) {
         const QJsonObject track = data.value("track").toObject();
         title = track.value("title").toString();
-        coverUri = track.value("coverUri").toString();
+        coverUri = parseCoverUri(track);
         description = item.value("description").toString();
       }
 

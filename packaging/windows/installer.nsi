@@ -79,7 +79,7 @@ Section "YaMusic" SecMain
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\YaMusic" \
     "DisplayVersion" "${VERSION}"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\YaMusic" \
-    "Publisher" "andfriden"
+    "Publisher" "Xyntril"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\YaMusic" \
     "UninstallString" "$\"$INSTDIR\Uninstall.exe$\""
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\YaMusic" \

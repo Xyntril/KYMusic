@@ -4,6 +4,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QStandardPaths>
+#include <QUrl>
 #include <algorithm>
 
 namespace {
@@ -52,7 +53,17 @@ qint64 TrackCache::limitBytes() const {
 }
 
 QString TrackCache::identityFor(const QString &trackId) {
-  return trackId.trimmed();
+  QString id = trackId.trimmed();
+  if (id.startsWith(QLatin1String("file://"))) {
+    QUrl url(id);
+    id = QFileInfo(url.toLocalFile()).completeBaseName();
+  } else if (id.contains('/') || id.contains('\\')) {
+    id = QFileInfo(id).completeBaseName();
+  }
+  if (id.contains(':')) {
+    id = id.section(':', 0, 0).trimmed();
+  }
+  return id;
 }
 
 QString TrackCache::pathFor(const QString &identity) const {

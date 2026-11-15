@@ -1,5 +1,5 @@
 import QtQuick
-import QtQuick.Controls.Basic
+import QtQuick.Controls
 import YaMusic 1.0
 
 Item {
@@ -31,7 +31,8 @@ Item {
 
     readonly property int margin: 20
     readonly property int spacing: 12
-    readonly property int columns: 6
+    readonly property bool isMobile: (typeof window !== "undefined" && window.isMobileMode) || contentColumn.width < 540
+    readonly property int columns: isMobile ? 2 : Math.max(2, Math.floor((contentColumn.width + spacing) / (180 + spacing)))
 
     // Ширина из реальной ширины сетки, чтобы карточки заполняли ряд
     readonly property real cardWidth:
@@ -220,7 +221,7 @@ Item {
                         height: 64
 
                         controller: root.controller
-                        rowIndex: model.index
+                        rowIndex: index
                         trackId: model.trackId
                         title: model.title
                         artist: model.artist
@@ -232,7 +233,7 @@ Item {
 
                         onActivated: {
                             if (root.controller) {
-                                root.controller.selectGenreStationTrack(model.index)
+                                root.controller.selectGenreStationTrack(index)
                             }
                         }
                     }

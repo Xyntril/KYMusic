@@ -1,4 +1,5 @@
 #include "AppController.h"
+#include "StatsController.h"
 
 void AppController::selectSearchResult(int index) {
   m_searchController->selectResult(index);
@@ -81,6 +82,34 @@ void AppController::selectSimilarTrack(int index) {
   }
 
   m_playbackController->playFromSource(tracks, index, "Похожие треки", "similar");
+}
+
+void AppController::playStatsTrack(int index) {
+  if (m_statsController == nullptr) return;
+  const QVariantList list = m_statsController->topTracks(100);
+  if (index < 0 || index >= list.size()) return;
+
+  QList<Track> tracks;
+  for (const QVariant &v : list) {
+    const QVariantMap item = v.toMap();
+    Track t;
+    t.id = item.value("id").toString();
+    t.title = item.value("title").toString();
+    t.coverUri = item.value("coverUri").toString();
+    t.durationMs = item.value("durationMs").toLongLong();
+    const QString artistName = item.value("artist").toString();
+    const QString artistId = item.value("artistId").toString();
+    if (!artistName.isEmpty()) {
+      Artist a;
+      a.id = artistId;
+      a.name = artistName;
+      t.artists.append(a);
+    }
+    tracks.append(t);
+  }
+
+  m_personalController->deactivateMyWave();
+  m_playbackController->playFromSource(tracks, index, "Топ треков", "stats");
 }
 
 void AppController::loadMoreGenreStation() {

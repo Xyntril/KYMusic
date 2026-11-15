@@ -28,34 +28,31 @@ void PersonalController::connectRecommendations() {
           [this](const QList<Podcast> &podcasts) {
             m_podcasts = podcasts;
             emit podcastsChanged();
-
-            if (!podcasts.isEmpty()) {
-              emit statusChanged(
-                  QStringLiteral("Подкастов загружено: %1").arg(podcasts.size()));
-            }
           });
 
   connect(m_personalLanding, &PersonalLanding::wheelReceived, this,
           [this](const QVariantList &items) {
             m_wheelItems = items;
             emit wheelItemsChanged();
-            if (!items.isEmpty()) {
-              emit statusChanged(
-                  QStringLiteral("Колесо: элементов %1").arg(items.size()));
-            }
           });
 
   connect(m_personalLanding, &PersonalLanding::errorOccurred, this, [this](const QString &message) {
-m_loadingRecommendations = false;
-  emit loadingRecommendationsChanged();
-  m_recommendationSections.clear();
-  m_recommendationPlaylists.clear();
-  m_podcasts.clear();
-  emit podcastsChanged();
+    m_loadingRecommendations = false;
+    emit loadingRecommendationsChanged();
+    m_recommendationSections.clear();
+    m_recommendationPlaylists.clear();
+    m_podcasts.clear();
+    emit podcastsChanged();
 
-  m_personalPlaylistsModel->clear();
+    m_personalPlaylistsModel->clear();
 
-    emit statusChanged(QStringLiteral("Ошибка загрузки рекомендаций: %1").arg(message));
+    if (message.contains(QStringLiteral("gateway"), Qt::CaseInsensitive) ||
+        message.contains(QStringLiteral("502")) ||
+        message.contains(QStringLiteral("503"))) {
+      qDebug() << "Recommendations background network error (suppressed from UI):" << message;
+    } else {
+      emit statusChanged(QStringLiteral("Ошибка загрузки рекомендаций: %1").arg(message));
+    }
   });
 }
 
@@ -73,7 +70,6 @@ void PersonalController::loadRecommendations() {
 
   m_personalPlaylistsModel->clear();
 
-  emit statusChanged("Загрузка рекомендаций...");
   m_personalLanding->load();
   m_newPlaylistsService->load();
 }
@@ -122,7 +118,6 @@ void PersonalController::selectPersonalPlaylist(const QString &uid, int kind) {
 void PersonalController::loadWheel() {
   m_wheelItems.clear();
   emit wheelItemsChanged();
-  emit statusChanged("Загрузка Колеса...");
   m_personalLanding->loadWheel();
 }
 

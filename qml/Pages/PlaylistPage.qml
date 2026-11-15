@@ -1,16 +1,22 @@
 import QtQuick
-import QtQuick.Controls.Basic
-import QtQuick.Dialogs
+import QtQuick.Controls as QQC2
 import QtQuick.Layouts
+import org.kde.kirigami as Kirigami
 import YaMusic 1.0
+import "../Home"
+import "../Components"
 
 Item {
     id: root
 
     property var controller
 
-    // Страница занимает всю высоту области просмотра, а не свою контентную.
     readonly property bool fillHeight: true
+    readonly property bool isMobile:
+        (typeof window !== "undefined" && window.isMobileMode) || width < 680
+
+    property string filterText: ""
+    property bool isSearchVisible: false
 
     width: parent ? parent.width : 0
     height: parent ? parent.height : 700
@@ -22,238 +28,413 @@ Item {
         color: AppTheme.backgroundPrimary
     }
 
-    Column {
+    AmbientGlow {
         anchors.fill: parent
-        anchors.margins: 20
+        coverUri: root.controller !== null && root.controller !== undefined
+            ? String(root.controller.currentPlaylistCoverUri || "")
+            : ""
+        glowOpacity: 0.16
+    }
 
-        spacing: 20
+    ColumnLayout {
+        anchors.fill: parent
+        anchors.margins: root.isMobile ? 14 : 24
+        spacing: root.isMobile ? 12 : 20
 
-        // Шапка плейлиста
-        Row {
-            width: parent.width
-            height: 180
+        // =====================================================================
+        // 1. МОБИЛЬНАЯ ШАПКА ПЛЕЙЛИСТА
+        // =====================================================================
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 12
+            visible: root.isMobile
 
-            spacing: 20
+            // Верхний ряд: кнопка поиска и меню ⋯
+            RowLayout {
+                Layout.fillWidth: true
 
-            // Обложка
+                Item { Layout.fillWidth: true }
+
+                QQC2.ToolButton {
+                    icon.name: "search"
+                    checkable: true
+                    checked: root.isSearchVisible
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("Поиск по трекам")
+                    onClicked: root.isSearchVisible = !root.isSearchVisible
+                }
+
+                QQC2.ToolButton {
+                    id: mobileMoreBtn
+                    icon.name: "overflow-menu"
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("Действия с плейлистом")
+                    visible: root.controller && root.controller.currentPlaylistKind > 0
+                    onClicked: playlistMenu.popup(mobileMoreBtn, 0, mobileMoreBtn.height)
+                }
+            }
+
+            // Центр: Крупная скруглённая обложка (180x180, radius 12)
             Rectangle {
-                width: 180
-                height: 180
-
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredWidth: Math.min(200, Math.max(140, root.width * 0.48))
+                Layout.preferredHeight: Layout.preferredWidth
                 radius: 12
                 color: AppTheme.panelSecondary
+                border.width: 1
+                border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.20)
                 clip: true
 
                 Image {
-                    id: playlistArtwork
-
+                    id: mobileArtwork
                     anchors.fill: parent
-
                     source: root.controller !== null && root.controller !== undefined &&
                         root.controller.currentPlaylistCoverUri.length > 0
                         ? "image://yandex/" + root.controller.currentPlaylistCoverUri
                         : ""
-
-                    sourceSize: Qt.size(360, 360)
-
+                    sourceSize: Qt.size(400, 400)
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
                     cache: true
                     smooth: true
-
                     visible: status === Image.Ready
                 }
 
-                Label {
+                Kirigami.Icon {
                     anchors.centerIn: parent
-
-                    text: "♪"
-                    color: AppTheme.textSecondary
-                    font.pixelSize: 48
-
-                    visible: playlistArtwork.status !== Image.Ready
+                    width: 64
+                    height: 64
+                    source: "view-media-playlist"
+                    color: Kirigami.Theme.disabledTextColor
+                    visible: mobileArtwork.status !== Image.Ready
                 }
             }
 
-            // Информация и действия
-            Column {
-                anchors.verticalCenter: parent.verticalCenter
+            // Название плейлиста и счётчик треков
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 2
 
-                width: parent.width - 200
-                spacing: 8
-
-                Row {
-                    width: parent.width
-                    spacing: 10
-
-                    Label {
-                        width: parent.width - renameButton.width - deleteButton.width -
-                            parent.spacing * 2
-
-                        text: root.controller !== null && root.controller !== undefined &&
-                            root.controller.currentPlaylistTitle.length > 0
-                            ? root.controller.currentPlaylistTitle
-                            : "Плейлист"
-
-                        color: AppTheme.textPrimary
-                        font.pixelSize: 28
-                        font.bold: true
-
-                        elide: Text.ElideRight
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-
-                    // Переименовать
-                    Rectangle {
-                        id: renameButton
-
-                        width: 32
-                        height: 32
-
-                        radius: 7
-                        color: renameMouse.containsMouse ? AppTheme.panelHover : AppTheme.panel
-
-                        border.width: 1
-                        border.color: AppTheme.borderSubtle
-
-                        visible: root.controller && root.controller.currentPlaylistKind > 0
-
-                        Label {
-                            anchors.centerIn: parent
-
-                            text: "✎"
-                            color: renameMouse.containsMouse ? AppTheme.accent : AppTheme.textSecondary
-                            font.pixelSize: 16
-                        }
-
-                        MouseArea {
-                            id: renameMouse
-
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-
-                            onClicked: {
-                                renameDialog.newName = root.controller.currentPlaylistTitle
-                                renameDialog.open()
-                            }
-                        }
-                    }
-
-                    // Удалить
-                    Rectangle {
-                        id: deleteButton
-
-                        width: 32
-                        height: 32
-
-                        radius: 7
-                        color: deleteMouse.containsMouse ? AppTheme.panelHover : AppTheme.panel
-
-                        border.width: 1
-                        border.color: AppTheme.borderSubtle
-
-                        visible: root.controller && root.controller.currentPlaylistKind > 0
-
-                        Label {
-                            anchors.centerIn: parent
-
-                            text: "🗑"
-                            color: deleteMouse.containsMouse ? AppTheme.accent : AppTheme.textSecondary
-                            font.pixelSize: 14
-                        }
-
-                        MouseArea {
-                            id: deleteMouse
-
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-
-                            onClicked: {
-                                if (root.controller) {
-                                    deleteConfirmDialog.open()
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Label {
-                    width: parent.width
-
+                Kirigami.Heading {
+                    Layout.fillWidth: true
+                    level: 1
                     text: root.controller !== null && root.controller !== undefined &&
-                        root.controller.loadingPlaylist
-                        ? "Загрузка..."
-                        : ""
+                        root.controller.currentPlaylistTitle.length > 0
+                        ? root.controller.currentPlaylistTitle
+                        : qsTr("Плейлист")
+                    elide: Text.ElideRight
+                    maximumLineCount: 2
+                    horizontalAlignment: Text.AlignHCenter
+                    font.bold: true
+                }
 
-                    color: AppTheme.textSecondary
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    text: root.controller !== null && root.controller !== undefined &&
+                        root.controller.currentPlaylistTrackCount > 0
+                        ? qsTr("%1 треков").arg(root.controller.currentPlaylistTrackCount)
+                        : (root.controller && root.controller.loadingPlaylist ? qsTr("Загрузка…") : "")
+                    color: Kirigami.Theme.disabledTextColor
                     font.pixelSize: 13
+                    horizontalAlignment: Text.AlignHCenter
                 }
             }
 
-            // Подтверждение удаления
-            Dialog {
-                id: deleteConfirmDialog
+            // Плашка «▶ Моя волна по плейлисту»
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: 46
+                radius: Kirigami.Units.cornerRadius
+                color: Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.16)
+                border.width: 1
+                border.color: Kirigami.Theme.highlightColor
 
-                title: "Удалить плейлист?"
-                standardButtons: Dialog.Yes | Dialog.No
+                RowLayout {
+                    anchors.centerIn: parent
+                    spacing: 8
 
-                anchors.centerIn: parent
+                    Kirigami.Icon {
+                        source: "media-playback-start"
+                        implicitWidth: 18
+                        implicitHeight: 18
+                        color: Kirigami.Theme.highlightColor
+                    }
 
-                onAccepted: {
-                    if (root.controller) {
-                        root.controller.deleteCurrentPlaylist()
+                    QQC2.Label {
+                        text: qsTr("Моя волна по плейлисту «%1»").arg(root.controller ? root.controller.currentPlaylistTitle : "")
+                        font.weight: Font.DemiBold
+                        color: Kirigami.Theme.highlightColor
+                        elide: Text.ElideRight
+                        Layout.maximumWidth: root.width - 80
+                    }
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (root.controller) {
+                            if (typeof appController !== "undefined" && appController.startPlaylistWave) {
+                                appController.startPlaylistWave(
+                                    root.controller.currentPlaylistUid || "",
+                                    root.controller.currentPlaylistKind || 0,
+                                    root.controller.currentPlaylistTitle || ""
+                                )
+                            } else {
+                                root.controller.selectPlaylistTrack(0)
+                            }
+                        }
                     }
                 }
             }
 
-            // Переименование
-            Dialog {
-                id: renameDialog
+            // Кнопки «Скачать» и «▶ Слушать»
+            RowLayout {
+                Layout.alignment: Qt.AlignHCenter
+                spacing: 12
 
-                property string newName: ""
-
-                title: "Новое название"
-                standardButtons: Dialog.Ok | Dialog.Cancel
-
-                anchors.centerIn: parent
-
-                contentItem: ColumnLayout {
-                    spacing: 12
-
-                    TextField {
-                        id: nameField
-
-                        Layout.fillWidth: true
-
-                        text: renameDialog.newName
-                        selectByMouse: true
-
-                        onAccepted: renameDialog.accept()
-                        Component.onCompleted: forceActiveFocus()
+                QQC2.Button {
+                    icon.name: "download"
+                    text: qsTr("Скачать")
+                    onClicked: {
+                        if (typeof appController !== "undefined" && appController.downloadPlaylistTracks) {
+                            appController.downloadPlaylistTracks()
+                        }
                     }
                 }
 
-                onAccepted: {
-                    if (root.controller) {
-                        root.controller.renameCurrentPlaylist(nameField.text.trim())
+                QQC2.Button {
+                    icon.name: "media-playback-start"
+                    text: qsTr("Слушать")
+                    highlighted: true
+                    onClicked: {
+                        if (root.controller) {
+                            root.controller.selectPlaylistTrack(0)
+                        }
                     }
                 }
             }
         }
 
-        // Треки
+        // =====================================================================
+        // 2. ДЕСКТОПНАЯ ШАПКА ПЛЕЙЛИСТА
+        // =====================================================================
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 24
+            visible: !root.isMobile
+
+            // Обложка плейлиста (180x180, radius 10, Breeze)
+            Rectangle {
+                Layout.preferredWidth: 180
+                Layout.preferredHeight: 180
+                radius: 10
+                color: AppTheme.panelSecondary
+                border.width: 1
+                border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.20)
+                clip: true
+
+                Image {
+                    id: desktopArtwork
+                    anchors.fill: parent
+                    source: root.controller !== null && root.controller !== undefined &&
+                        root.controller.currentPlaylistCoverUri.length > 0
+                        ? "image://yandex/" + root.controller.currentPlaylistCoverUri
+                        : ""
+                    sourceSize: Qt.size(360, 360)
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    cache: true
+                    smooth: true
+                    visible: status === Image.Ready
+                }
+
+                Kirigami.Icon {
+                    anchors.centerIn: parent
+                    width: 64
+                    height: 64
+                    source: "view-media-playlist"
+                    color: Kirigami.Theme.disabledTextColor
+                    visible: desktopArtwork.status !== Image.Ready
+                }
+            }
+
+            // Описание, заголовок и кнопки действий
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 10
+
+                QQC2.Label {
+                    text: qsTr("ПЛЕЙЛИСТ")
+                    font.pixelSize: 11
+                    font.weight: Font.DemiBold
+                    color: Kirigami.Theme.disabledTextColor
+                }
+
+                Kirigami.Heading {
+                    Layout.fillWidth: true
+                    level: 1
+                    text: root.controller !== null && root.controller !== undefined &&
+                        root.controller.currentPlaylistTitle.length > 0
+                        ? root.controller.currentPlaylistTitle
+                        : qsTr("Плейлист")
+                    font.bold: true
+                    elide: Text.ElideRight
+                }
+
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    text: root.controller !== null && root.controller !== undefined &&
+                        root.controller.currentPlaylistTrackCount > 0
+                        ? qsTr("%1 треков").arg(root.controller.currentPlaylistTrackCount)
+                        : (root.controller && root.controller.loadingPlaylist ? qsTr("Загрузка…") : "")
+                    color: Kirigami.Theme.disabledTextColor
+                    font.pixelSize: 13
+                }
+
+                // Ряд кнопок: ▶ Слушать, ⬇ Скачать, ▶ Моя волна, ⋯
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+
+                    QQC2.Button {
+                        icon.name: "media-playback-start"
+                        text: qsTr("Слушать")
+                        highlighted: true
+                        onClicked: {
+                            if (root.controller) {
+                                root.controller.selectPlaylistTrack(0)
+                            }
+                        }
+                    }
+
+                    QQC2.Button {
+                        icon.name: "download"
+                        text: qsTr("Скачать")
+                        onClicked: {
+                            if (typeof appController !== "undefined" && appController.downloadPlaylistTracks) {
+                                appController.downloadPlaylistTracks()
+                            }
+                        }
+                    }
+
+                    QQC2.Button {
+                        icon.name: "media-playlist-shuffle"
+                        text: qsTr("Моя волна по плейлисту")
+                        onClicked: {
+                            if (root.controller) {
+                                if (typeof appController !== "undefined" && appController.startPlaylistWave) {
+                                    appController.startPlaylistWave(
+                                        root.controller.currentPlaylistUid || "",
+                                        root.controller.currentPlaylistKind || 0,
+                                        root.controller.currentPlaylistTitle || ""
+                                    )
+                                } else {
+                                    root.controller.selectPlaylistTrack(0)
+                                }
+                            }
+                        }
+                    }
+
+                    QQC2.ToolButton {
+                        id: desktopMoreBtn
+                        icon.name: "overflow-menu"
+                        QQC2.ToolTip.visible: hovered
+                        QQC2.ToolTip.text: qsTr("Действия с плейлистом")
+                        visible: root.controller && root.controller.currentPlaylistKind > 0
+                        onClicked: playlistMenu.popup(desktopMoreBtn, 0, desktopMoreBtn.height)
+                    }
+
+                    Item { Layout.fillWidth: true }
+                }
+            }
+        }
+
+        // =====================================================================
+        // 3. ПОЛЕ ПОИСКА ПО ТРЕКАМ ПЛЕЙЛИСТА
+        // =====================================================================
+        Kirigami.SearchField {
+            id: searchField
+            Layout.fillWidth: true
+            placeholderText: qsTr("Поиск трека в плейлисте…")
+            visible: !root.isMobile || root.isSearchVisible
+            onTextChanged: root.filterText = text.trim()
+        }
+
+        // =====================================================================
+        // 4. СПИСОК ТРЕКОВ
+        // =====================================================================
         PlaylistView {
             id: playlistView
-
-            width: parent.width
-            height: Math.max(0, parent.height - 200)
-
+            Layout.fillWidth: true
+            Layout.fillHeight: true
             controller: root.controller
-
+            filterText: root.filterText
             visible: root.controller !== null && root.controller !== undefined &&
                 !root.controller.loadingPlaylist
+        }
+    }
+
+    // Выпадающее меню действий плейлиста
+    QQC2.Menu {
+        id: playlistMenu
+
+        QQC2.MenuItem {
+            text: qsTr("Переименовать плейлист")
+            icon.name: "edit-rename"
+            onTriggered: {
+                renameDialog.newName = root.controller.currentPlaylistTitle
+                nameField.text = root.controller.currentPlaylistTitle
+                renameDialog.open()
+            }
+        }
+
+        QQC2.MenuItem {
+            text: qsTr("Удалить плейлист")
+            icon.name: "edit-delete"
+            onTriggered: deleteConfirmDialog.open()
+        }
+    }
+
+    // Нативный диалог удаления плейлиста
+    Kirigami.PromptDialog {
+        id: deleteConfirmDialog
+        title: qsTr("Удалить плейлист?")
+        subtitle: qsTr("Вы действительно хотите удалить плейлист «%1»?").arg(
+            root.controller ? root.controller.currentPlaylistTitle : ""
+        )
+        standardButtons: Kirigami.Dialog.Yes | Kirigami.Dialog.Cancel
+        onAccepted: {
+            if (root.controller) {
+                root.controller.deleteCurrentPlaylist()
+            }
+            if (typeof mainLayout !== "undefined" && mainLayout.backRequested) {
+                mainLayout.backRequested()
+            }
+        }
+    }
+
+    // Нативный диалог переименования плейлиста
+    Kirigami.PromptDialog {
+        id: renameDialog
+        property string newName: ""
+        title: qsTr("Переименовать плейлист")
+        subtitle: qsTr("Введите новое название плейлиста:")
+        standardButtons: Kirigami.Dialog.Ok | Kirigami.Dialog.Cancel
+
+        QQC2.TextField {
+            id: nameField
+            Layout.fillWidth: true
+            text: renameDialog.newName
+            selectByMouse: true
+            onAccepted: renameDialog.accept()
+            Component.onCompleted: forceActiveFocus()
+        }
+
+        onAccepted: {
+            if (root.controller && nameField.text.trim().length > 0) {
+                root.controller.renameCurrentPlaylist(nameField.text.trim())
+            }
         }
     }
 }

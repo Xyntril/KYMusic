@@ -1,6 +1,7 @@
 import QtQuick
-import QtQuick.Controls.Basic
+import QtQuick.Controls
 import QtQuick.Layouts
+import org.kde.kirigami as Kirigami
 import YaMusic 1.0
 
 Item {
@@ -109,20 +110,35 @@ Item {
         anchors.fill: parent
         spacing: 16
 
-        SearchBar {
-            id: searchBar
-
+        RowLayout {
             Layout.fillWidth: true
-            Layout.preferredHeight: 42
+            spacing: 8
 
-            controller: root.controller
+            SearchBar {
+                id: searchBar
 
-            onQueryEdited: function(text) {
-                root.scheduleSearch(text)
+                Layout.fillWidth: true
+                Layout.preferredHeight: 42
+
+                controller: root.controller
+
+                onQueryEdited: function(text) {
+                    root.scheduleSearch(text)
+                }
+                onSearchSubmitted: {
+                    suggestTimer.stop()
+                    liveSearchTimer.stop()
+                }
             }
-            onSearchSubmitted: {
-                suggestTimer.stop()
-                liveSearchTimer.stop()
+
+            ToolButton {
+                visible: (typeof window !== "undefined" && window.isMobileMode)
+                icon.name: "application-menu"
+                onClicked: {
+                    if (typeof mainLayout !== "undefined") {
+                        mainLayout.openMenu(this)
+                    }
+                }
             }
         }
 
@@ -132,103 +148,34 @@ Item {
             text: "Показаны результаты для «" + root.correction + "»"
             color: AppTheme.textSecondary
             font.pixelSize: 12
-            elide: Text.ElideRight
+            wrapMode: Text.WordWrap
         }
 
         ColumnLayout {
             Layout.fillWidth: true
+            Layout.fillHeight: true
             visible: !root.hasQuery
-            spacing: 10
+            spacing: 16
 
-            Label {
+            // 1. Блок недавних запросов (если есть история)
+            ColumnLayout {
                 Layout.fillWidth: true
                 visible: root.history.length > 0
-                text: "Недавние запросы"
-                color: AppTheme.textPrimary
-                font.pixelSize: 18
-                font.weight: Font.DemiBold
-            }
+                spacing: 10
 
-            Flow {
-                Layout.fillWidth: true
-                spacing: 8
-                visible: root.history.length > 0
+                RowLayout {
+                    Layout.fillWidth: true
 
-                Repeater {
-                    model: root.history
-
-                    delegate: Rectangle {
-                        id: historyChip
-
-                        required property string modelData
-
-                        width: historyChipLabel.implicitWidth + 24
-                        height: 32
-                        radius: 16
-
-                        color: historyMouse.containsMouse
-                            ? AppTheme.panelActive
-                            : AppTheme.panelSecondary
-
-                        border.width: 1
-                        border.color: AppTheme.borderSubtle
-
-                        Text {
-                            id: historyChipLabel
-
-                            anchors.centerIn: parent
-                            text: historyChip.modelData
-                            color: AppTheme.textPrimary
-                            font.pixelSize: 13
-                        }
-
-                        MouseArea {
-                            id: historyMouse
-
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-
-                            onClicked: {
-                                searchBar.setText(historyChip.modelData)
-                                searchBar.performSearch()
-                            }
-                        }
-                    }
-                }
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                visible: root.history.length > 0
-
-                Item { Layout.fillWidth: true }
-
-                Rectangle {
-                    width: clearHistoryLabel.implicitWidth + 20
-                    height: 30
-                    radius: 8
-
-                    color: clearHistoryMouse.containsMouse
-                        ? AppTheme.panelHover
-                        : "transparent"
-
-                    Text {
-                        id: clearHistoryLabel
-
-                        anchors.centerIn: parent
-                        text: "Очистить историю"
-                        color: AppTheme.textSecondary
-                        font.pixelSize: 12
+                    Kirigami.Heading {
+                        Layout.fillWidth: true
+                        level: 2
+                        text: qsTr("Недавние запросы")
                     }
 
-                    MouseArea {
-                        id: clearHistoryMouse
-
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-
+                    ToolButton {
+                        text: qsTr("Очистить")
+                        icon.name: "edit-clear-history"
+                        flat: true
                         onClicked: {
                             if (root.searchController !== null) {
                                 root.searchController.clearHistory()
@@ -236,17 +183,40 @@ Item {
                         }
                     }
                 }
+
+                Flow {
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    Repeater {
+                        model: root.history
+
+                        delegate: Button {
+                            id: historyChip
+                            required property string modelData
+
+                            text: modelData
+                            icon.name: "edit-find"
+                            flat: true
+
+                            onClicked: {
+                                searchBar.setText(modelData)
+                                searchBar.performSearch()
+                            }
+                        }
+                    }
+                }
             }
 
-            Label {
+            // 2. Центрированная заглушка PlaceholderMessage в нативном стиле KDE Plasma
+            Kirigami.PlaceholderMessage {
                 Layout.fillWidth: true
-                visible: root.history.length === 0
-                text: "Введите запрос — результаты появятся по мере ввода"
-                color: AppTheme.textMuted
-                font.pixelSize: 13
+                Layout.fillHeight: true
+                Layout.alignment: Qt.AlignCenter
+                icon.name: "search"
+                text: qsTr("Найдите любимые треки, альбомы, исполнителей и подкасты")
+                explanation: root.history.length === 0 ? qsTr("Результаты поиска появятся по мере ввода") : ""
             }
-
-            Item { Layout.fillHeight: true }
         }
 
         Rectangle {
@@ -323,7 +293,12 @@ Item {
                         clip: true
                         spacing: 6
 
-                        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                        ScrollBar.vertical: ScrollBar {
+                            policy: ScrollBar.AsNeeded
+                            width: (typeof window !== "undefined" && window.isMobileMode) ? 3 : 10
+                            opacity: (typeof window !== "undefined" && window.isMobileMode) ? (active ? 0.5 : 0) : 1
+                            Behavior on opacity { NumberAnimation { duration: 150 } }
+                        }
 
                         onAtYEndChanged: {
                             if (atYEnd && root.controller) {
@@ -336,7 +311,7 @@ Item {
                                 (tracksView.ScrollBar.vertical.visible ? 10 : 0)
 
                             controller: root.controller
-                            rowIndex: model.index
+                            rowIndex: index
                             trackId: model.trackId
                             title: model.title
                             artist: model.artist
@@ -348,7 +323,7 @@ Item {
                             durationMs: model.durationMs
                             showAdd: true
 
-                            onActivated: root.controller.selectSearchResult(model.index)
+                            onActivated: root.controller.selectSearchResult(index)
                             onAddRequested: function(trackId, albumId) {
                                 addToPlaylistPopup.trackId = trackId
                                 addToPlaylistPopup.albumId = albumId
@@ -380,7 +355,12 @@ Item {
                         clip: true
                         spacing: 6
 
-                        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                        ScrollBar.vertical: ScrollBar {
+                            policy: ScrollBar.AsNeeded
+                            width: (typeof window !== "undefined" && window.isMobileMode) ? 3 : 10
+                            opacity: (typeof window !== "undefined" && window.isMobileMode) ? (active ? 0.5 : 0) : 1
+                            Behavior on opacity { NumberAnimation { duration: 150 } }
+                        }
 
                         delegate: Rectangle {
                             required property int index
@@ -512,7 +492,12 @@ Item {
                         clip: true
                         spacing: 6
 
-                        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                        ScrollBar.vertical: ScrollBar {
+                            policy: ScrollBar.AsNeeded
+                            width: (typeof window !== "undefined" && window.isMobileMode) ? 3 : 10
+                            opacity: (typeof window !== "undefined" && window.isMobileMode) ? (active ? 0.5 : 0) : 1
+                            Behavior on opacity { NumberAnimation { duration: 150 } }
+                        }
 
                         delegate: Rectangle {
                             required property int index
@@ -617,7 +602,12 @@ Item {
                         clip: true
                         spacing: 6
 
-                        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                        ScrollBar.vertical: ScrollBar {
+                            policy: ScrollBar.AsNeeded
+                            width: (typeof window !== "undefined" && window.isMobileMode) ? 3 : 10
+                            opacity: (typeof window !== "undefined" && window.isMobileMode) ? (active ? 0.5 : 0) : 1
+                            Behavior on opacity { NumberAnimation { duration: 150 } }
+                        }
 
                         delegate: Rectangle {
                             required property int index

@@ -122,8 +122,6 @@ void PersonalController::handleMyWaveReceived(const QList<Track> &tracks, const 
     queue->addTracks(tracks);
     queue->setSource("Моя волна", "myWave");
 
-    emit statusChanged(QStringLiteral("Моя волна: %1 треков").arg(m_myWaveModel->count()));
-
     if (!queue->setCurrentIndex(0)) {
       emit statusChanged("Не удалось заменить очередь моей волны");
       return;
@@ -152,7 +150,6 @@ void PersonalController::handleMyWaveReceived(const QList<Track> &tracks, const 
 
     m_myWaveQueueActive = true;
     m_waitingForMoreMyWave = false;
-    emit statusChanged(QStringLiteral("Моя волна: %1 треков").arg(m_myWaveModel->count()));
     return;
   }
 
@@ -173,8 +170,6 @@ void PersonalController::handleMyWaveReceived(const QList<Track> &tracks, const 
   const int oldCount = m_myWaveModel->count();
   m_myWaveModel->appendTracks(batch);
   appendMyWaveTracksToQueue(batch);
-  const int appended = m_myWaveModel->count() - oldCount;
-  emit statusChanged(QStringLiteral("Моя волна: %1 треков").arg(m_myWaveModel->count()));
 
   if (!m_waitingForMoreMyWave) {
     return;
@@ -185,7 +180,7 @@ void PersonalController::handleMyWaveReceived(const QList<Track> &tracks, const 
   QueueService *queue = m_playbackController->queueService();
   queue->setSource("Моя волна", "myWave");
 
-  if (!queue->hasNext()) {
+  if (!queue->hasNext() || queue->repeatMode() == QueueService::RepeatOne) {
     return;
   }
 
@@ -287,6 +282,10 @@ void PersonalController::handleMyWavePlaybackFinished() {
   }
 
   QueueService *queue = m_playbackController->queueService();
+
+  if (queue != nullptr && queue->repeatMode() == QueueService::RepeatOne) {
+    return;
+  }
 
   if (queue->hasNext()) {
     queue->next();

@@ -25,6 +25,7 @@ QVariant LibraryPlaylistsModel::data(const QModelIndex &index, int role) const {
   case DescriptionRole:
     return playlist.description;
   case CoverUriRole:
+  case CoverUrlRole:
     return playlist.coverUri;
   case TrackCountRole:
     return playlist.trackCount;
@@ -41,6 +42,7 @@ QHash<int, QByteArray> LibraryPlaylistsModel::roleNames() const {
           {TitleRole, "title"},
           {DescriptionRole, "description"},
           {CoverUriRole, "coverUri"},
+          {CoverUrlRole, "coverUrl"},
           {TrackCountRole, "trackCount"}};
 }
 
@@ -48,6 +50,32 @@ void LibraryPlaylistsModel::setPlaylists(const QList<PersonalPlaylist> &playlist
   beginResetModel();
   m_playlists = playlists;
   endResetModel();
+}
+
+bool LibraryPlaylistsModel::updateCoverUri(int kind, const QString &coverUri) {
+  for (int i = 0; i < m_playlists.size(); ++i) {
+    if (m_playlists.at(i).kind == kind) {
+      if (m_playlists[i].coverUri != coverUri) {
+        m_playlists[i].coverUri = coverUri;
+        const QModelIndex idx = index(i, 0);
+        emit dataChanged(idx, idx, {CoverUriRole, CoverUrlRole});
+        return true;
+      }
+      return false;
+    }
+  }
+  return false;
+}
+
+void LibraryPlaylistsModel::removePlaylistByKind(int kind) {
+  for (int i = 0; i < m_playlists.size(); ++i) {
+    if (m_playlists.at(i).kind == kind) {
+      beginRemoveRows(QModelIndex(), i, i);
+      m_playlists.removeAt(i);
+      endRemoveRows();
+      break;
+    }
+  }
 }
 
 void LibraryPlaylistsModel::clear() {

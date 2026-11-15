@@ -2,6 +2,7 @@
 #include <QStringList>
 #include "../Models/PersonalPlaylist.h"
 #include "../Player/PlayerService.h"
+#include "../Player/TrackCache.h"
 #include "../Queue/QueueService.h"
 #include "../Yandex/Account/AccountService.h"
 #include "../Yandex/Auth/YandexAuth.h"
@@ -28,6 +29,10 @@
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QSettings>
+
+#include <KAboutApplicationDialog>
+#include <KAboutData>
+#include <KHelpMenu>
 
 AppController::AppController(YandexAuth *auth, AccountService *accountService, QObject *parent)
     : QObject(parent), m_auth(auth), m_accountService(accountService),
@@ -231,6 +236,20 @@ void AppController::connectAccount() {
 
   connect(m_accountService, &AccountService::errorOccurred, this,
           &AppController::statusChanged);
+
+  connect(m_auth, &YandexAuth::authenticationChanged, this, [this]() {
+    if (!m_auth->isAuthenticated()) {
+      if (m_playbackController) {
+        m_playbackController->stop();
+      }
+      if (m_ynisonReporter) {
+        m_ynisonReporter->stop();
+      }
+      if (m_ynisonClient) {
+        m_ynisonClient->disconnectFromYnison();
+      }
+    }
+  });
 }
 
 void AppController::connectSearch() {
@@ -339,6 +358,12 @@ void AppController::connectAlbum() {
 
     m_albumController->playAlbum();
   });
+
+  connect(m_albumController, &AlbumController::trackSelected, this, [this](const Track &) {
+    if (m_personalController) {
+      m_personalController->deactivateMyWave();
+    }
+  });
 }
 
 void AppController::connectPersonal() {
@@ -386,6 +411,12 @@ void AppController::connectArtist() {
           [this](const QString &artistId) {
             loadArtist(artistId);
           });
+
+  connect(m_artistController, &ArtistController::trackSelected, this, [this](const Track &) {
+    if (m_personalController) {
+      m_personalController->deactivateMyWave();
+    }
+  });
 }
 
 void AppController::connectGenre() {
@@ -452,11 +483,19 @@ void AppController::connectPlayback() {
   connect(m_playbackController, &PlaybackController::streamQualityInfoChanged, this,
           &AppController::streamQualityInfoChanged);
 
+  connect(m_playbackController, &PlaybackController::raiseRequested, this,
+          &AppController::raiseRequested);
+
   connect(m_playbackController, &PlaybackController::playbackError, this,
           &AppController::statusChanged);
 
   connect(m_playbackController, &PlaybackController::playlistExhausted, this,
           [this](const QString &sourceType, const QString &) {
+            // Жёсткий гард: при RepeatOne никогда не запускать My Wave или радиопотоки
+            if (m_playbackController->repeatMode() == QueueService::RepeatOne) {
+              return;
+            }
+
             /*
              * My Wave:
              *
@@ -477,6 +516,10 @@ void AppController::connectPlayback() {
 
             if (sourceType == "station") {
               m_stationsController->handleStationPlaylistExhausted();
+              return;
+            }
+
+            if (sourceType == "likes") {
               return;
             }
 
@@ -831,6 +874,12 @@ QVariantMap AppController::queueTrackData(int index) const {
   return result;
 }
 
+void AppController::selectQueueTrack(int index) {
+  if (m_playbackController != nullptr) {
+    m_playbackController->playQueueTrack(index);
+  }
+}
+
 SearchModel *AppController::searchModel() const {
   return m_searchController->model();
 }
@@ -925,6 +974,10 @@ AudioQualityController *AppController::audioQualityController() const {
 
 StatsController *AppController::statsController() const {
   return m_statsController;
+}
+
+PlaybackController *AppController::playbackController() const {
+  return m_playbackController;
 }
 
 bool AppController::isSearching() const {
@@ -1163,6 +1216,72 @@ void AppController::downloadTrack(const QString &trackId, const QString &title,
   m_downloadService->downloadCurrentTrack(track);
 }
 
+bool AppController::isTrackCached(const QString &trackId) const {
+  if (trackId.isEmpty() || !m_playbackController || !m_playbackController->trackCache()) {
+    return false;
+  }
+  return m_playbackController->trackCache()->contains(TrackCache::identityFor(trackId));
+}
+
+void AppController::downloadPlaylistTracks() {
+  if (!m_libraryController || !m_libraryController->playlistModel()) return;
+  PlaylistModel *pm = m_libraryController->playlistModel();
+  for (int i = 0; i < pm->count(); ++i) {
+    const Track t = pm->trackAt(i);
+    if (!t.id.isEmpty()) {
+      const QString artistName = t.artists.isEmpty() ? QString() : t.artists.first().name;
+      const QString albumTitle = t.albums.isEmpty() ? QString() : t.albums.first().title;
+      downloadTrack(t.id, t.title, artistName, albumTitle, t.coverUri, t.durationMs);
+    }
+  }
+}
+
+void AppController::downloadLikedTracks() {
+  if (!m_libraryController || !m_libraryController->likedTracksModel()) return;
+  LikedTracksModel *lm = m_libraryController->likedTracksModel();
+  for (int i = 0; i < lm->count(); ++i) {
+    const Track t = lm->trackAt(i);
+    if (!t.id.isEmpty()) {
+      const QString artistName = t.artists.isEmpty() ? QString() : t.artists.first().name;
+      const QString albumTitle = t.albums.isEmpty() ? QString() : t.albums.first().title;
+      downloadTrack(t.id, t.title, artistName, albumTitle, t.coverUri, t.durationMs);
+    }
+  }
+}
+
+void AppController::downloadAlbumTracks() {
+  if (!m_albumController || !m_albumController->albumModel()) return;
+  AlbumModel *am = m_albumController->albumModel();
+  for (int i = 0; i < am->count(); ++i) {
+    const Track t = am->trackAt(i);
+    if (!t.id.isEmpty()) {
+      const QString artistName = t.artists.isEmpty() ? QString() : t.artists.first().name;
+      const QString albumTitle = t.albums.isEmpty() ? QString() : t.albums.first().title;
+      downloadTrack(t.id, t.title, artistName, albumTitle, t.coverUri, t.durationMs);
+    }
+  }
+}
+
+void AppController::startPlaylistWave(const QString &uid, int kind, const QString &title) {
+  if (m_stationsController) {
+    const QString effectiveUid = uid.isEmpty() ? m_accountUid : uid;
+    if (m_libraryController && m_libraryController->playlistModel() && m_libraryController->playlistModel()->count() > 0) {
+      const Track firstTrack = m_libraryController->playlistModel()->trackAt(0);
+      if (!firstTrack.id.isEmpty()) {
+        const QString stationTitle = title.isEmpty() ? QStringLiteral("Моя волна по плейлисту") : title;
+        m_stationsController->startTrackWave(firstTrack.id, stationTitle);
+        return;
+      }
+    }
+    const QString tag = QStringLiteral("%1_%2").arg(effectiveUid).arg(kind);
+    m_stationsController->selectStation(QStringLiteral("playlist"), tag, title.isEmpty() ? QStringLiteral("Моя волна по плейлисту") : title);
+  }
+}
+
+void AppController::startCollectionWave() {
+  loadMyWave();
+}
+
 DownloadService *AppController::downloadService() const {
   return m_downloadService;
 }
@@ -1198,4 +1317,44 @@ void AppController::setVolume(float volume) {
 
 void AppController::loadGenres() {
   m_genreController->loadGenres();
+}
+
+void AppController::showAboutAppDialog() {
+  auto *dialog = new KAboutApplicationDialog(KAboutData::applicationData(), nullptr);
+  dialog->setAttribute(Qt::WA_DeleteOnClose);
+  dialog->show();
+  dialog->raise();
+  dialog->activateWindow();
+}
+
+void AppController::showAboutKdeDialog() {
+  auto *helpMenu = new KHelpMenu(nullptr, KAboutData::applicationData());
+  helpMenu->aboutKDE();
+}
+
+void AppController::openSettings() {
+  emit settingsRequested();
+}
+
+void AppController::copyCurrentTrackTitle() {
+  const QString title = currentTrackTitle();
+  const QString artist = currentTrackArtist();
+  if (!title.isEmpty()) {
+    copyTrack(title, artist);
+  }
+}
+
+void AppController::logout() {
+  if (m_playbackController) {
+    m_playbackController->stop();
+  }
+  if (m_ynisonReporter) {
+    m_ynisonReporter->stop();
+  }
+  if (m_ynisonClient) {
+    m_ynisonClient->disconnectFromYnison();
+  }
+  if (m_auth) {
+    m_auth->clearToken();
+  }
 }

@@ -1,15 +1,13 @@
 import QtQuick
-import QtQuick.Controls.Basic
+import QtQuick.Controls
 import YaMusic 1.0
 
-// Контекстное меню трека: те же действия, что доступны в списках и плеере,
-// плюс запуск «Моей волны» по этому треку.
+// Контекстное меню трека со системными иконками KDE Breeze HIG
 Menu {
     id: root
 
     property var controller
     property string trackId: ""
-    // Не title: у Menu это FINAL-свойство заголовка меню.
     property string trackTitle: ""
     property string artist: ""
     property string artistId: ""
@@ -28,51 +26,20 @@ Menu {
 
     readonly property bool hasTrack: root.trackId.length > 0
 
-    padding: 6
+    padding: 4
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-
-    background: Rectangle {
-        implicitWidth: 250
-        implicitHeight: 6
-
-        radius: 10
-        color: AppTheme.panel
-        border.width: 1
-        border.color: AppTheme.border
-    }
 
     component TrackMenuItem: MenuItem {
         id: item
-
-        contentItem: Text {
-            leftPadding: 10
-            rightPadding: 10
-
-            text: item.text
-            font.pixelSize: 13
-            color: item.enabled
-                ? (item.highlighted ? AppTheme.accent : AppTheme.textPrimary)
-                : AppTheme.textMuted
-            elide: Text.ElideRight
-            verticalAlignment: Text.AlignVCenter
-        }
-
-        background: Rectangle {
-            implicitHeight: 32
-            radius: 6
-            color: item.highlighted ? AppTheme.panelHover : "transparent"
-        }
+        implicitWidth: 260
     }
 
     component TrackMenuSeparator: MenuSeparator {
-        contentItem: Rectangle {
-            implicitHeight: 1
-            color: AppTheme.borderSubtle
-        }
     }
 
     TrackMenuItem {
         text: qsTr("Моя волна по треку")
+        icon.name: "network-wireless"
 
         enabled: root.hasTrack && root.hasController &&
             root.controller.stationsController !== undefined
@@ -87,7 +54,8 @@ Menu {
     TrackMenuItem {
         text: root.liked
             ? qsTr("Убрать из «Мне нравится»")
-            : qsTr("Нравится")
+            : qsTr("Мне нравится")
+        icon.name: root.liked ? "starred-symbolic" : "non-starred-symbolic"
 
         enabled: root.hasTrack && root.hasController
 
@@ -102,6 +70,7 @@ Menu {
         text: root.disliked
             ? qsTr("Убрать дизлайк")
             : qsTr("Не нравится")
+        icon.name: "dialog-cancel"
 
         enabled: root.hasTrack && root.hasController
 
@@ -116,6 +85,7 @@ Menu {
 
     TrackMenuItem {
         text: qsTr("Добавить в плейлист")
+        icon.name: "list-add"
 
         visible: root.showAdd
         enabled: root.hasTrack && root.hasController
@@ -125,6 +95,7 @@ Menu {
 
     TrackMenuItem {
         text: qsTr("Скачать")
+        icon.name: "download"
 
         enabled: root.hasTrack && root.hasController
 
@@ -148,10 +119,14 @@ Menu {
 
     TrackMenuItem {
         text: qsTr("Перейти к исполнителю")
+        icon.name: "view-media-artist"
 
         enabled: root.artistId.length > 0 && root.hasController
 
         onTriggered: {
+            if (typeof window !== "undefined" && window.activeOverlay === window.overlayLyrics) {
+                window.activeOverlay = window.overlayNone
+            }
             if (root.hasController) {
                 root.controller.loadArtist(root.artistId)
             }
@@ -160,10 +135,14 @@ Menu {
 
     TrackMenuItem {
         text: qsTr("Перейти к альбому")
+        icon.name: "media-optical-audio"
 
         enabled: root.albumId.length > 0 && root.hasController
 
         onTriggered: {
+            if (typeof window !== "undefined" && window.activeOverlay === window.overlayLyrics) {
+                window.activeOverlay = window.overlayNone
+            }
             if (root.hasController) {
                 root.controller.loadAlbum(root.albumId)
             }
@@ -172,6 +151,7 @@ Menu {
 
     TrackMenuItem {
         text: qsTr("Скопировать «Исполнитель — Название»")
+        icon.name: "edit-copy"
 
         enabled: root.hasController
 
