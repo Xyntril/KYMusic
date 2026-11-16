@@ -93,5 +93,7 @@ cmake-build-*/
 /.tools/
 /build/appdir/
 *.AppImage
+*.apk
+*.apk.idsig
 dist/
 pkg/
