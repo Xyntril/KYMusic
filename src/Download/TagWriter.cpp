@@ -1,5 +1,6 @@
 #include "TagWriter.h"
 
+#ifdef HAVE_TAGLIB
 #include <taglib/attachedpictureframe.h>
 #include <taglib/fileref.h>
 #include <taglib/flacfile.h>
@@ -12,9 +13,11 @@
 #include <taglib/tag.h>
 #include <taglib/vorbisfile.h>
 #include <taglib/xiphcomment.h>
+#endif
 
 #include <QFile>
 
+#ifdef HAVE_TAGLIB
 namespace {
 
 // Возвращает MIME для встраивания: пустой — значит тега не будет.
@@ -24,6 +27,7 @@ bool isJpeg(const QString &mime) {
 }
 
 } // namespace
+#endif
 
 bool TagWriter::writeTags(
     const QString &filePath,
@@ -35,6 +39,18 @@ bool TagWriter::writeTags(
     int durationSeconds,
     const QByteArray &coverData,
     const QString &coverMime) {
+#ifndef HAVE_TAGLIB
+  Q_UNUSED(filePath);
+  Q_UNUSED(title);
+  Q_UNUSED(artist);
+  Q_UNUSED(album);
+  Q_UNUSED(trackNumber);
+  Q_UNUSED(trackCountKnown);
+  Q_UNUSED(durationSeconds);
+  Q_UNUSED(coverData);
+  Q_UNUSED(coverMime);
+  return true;
+#else
   if (filePath.isEmpty()) {
     return false;
   }
@@ -237,4 +253,5 @@ bool TagWriter::writeTags(
   // Неподдерживаемый контейнер — файл уже скачан корректно,
   // метаданные пропускаем.
   return true;
+#endif
 }

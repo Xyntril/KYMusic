@@ -1,12 +1,16 @@
 #include "ThemeController.h"
 
+#if defined(HAVE_KF6_COLORSCHEME)
 #include <KColorScheme>
 #include <KColorSchemeManager>
+#endif
 #include <QGuiApplication>
 #include <QPalette>
 
 ThemeController::ThemeController(QObject *parent) : QObject(parent) {
+#if defined(HAVE_KF6_COLORSCHEME)
   m_schemeManager = new KColorSchemeManager(this);
+#endif
 
   QSettings settings;
   m_themeMode = settings.value(QStringLiteral("theme/mode"), QStringLiteral("system")).toString();
@@ -51,6 +55,7 @@ void ThemeController::setDarkTheme(bool dark) {
 }
 
 void ThemeController::reloadColors() {
+#if defined(HAVE_KF6_COLORSCHEME)
   KColorScheme windowScheme(QPalette::Active, KColorScheme::Window);
   KColorScheme viewScheme(QPalette::Active, KColorScheme::View);
   KColorScheme buttonScheme(QPalette::Active, KColorScheme::Button);
@@ -67,6 +72,20 @@ void ThemeController::reloadColors() {
   m_systemDividerColor = windowScheme.shade(KColorScheme::MidShade);
   m_systemButtonBackground = buttonScheme.background().color();
   m_systemButtonText = buttonScheme.foreground().color();
+#else
+  const QPalette palette = QGuiApplication::palette();
+  m_systemWindowBackground = palette.color(QPalette::Active, QPalette::Window);
+  m_systemViewBackground = palette.color(QPalette::Active, QPalette::Base);
+  m_systemAlternateBackground = palette.color(QPalette::Active, QPalette::AlternateBase);
+  m_systemTextColor = palette.color(QPalette::Active, QPalette::WindowText);
+  m_systemSubtextColor = palette.color(QPalette::Active, QPalette::PlaceholderText);
+  m_systemHighlightColor = palette.color(QPalette::Active, QPalette::Highlight);
+  m_systemHighlightedTextColor = palette.color(QPalette::Active, QPalette::HighlightedText);
+  m_systemBorderColor = palette.color(QPalette::Active, QPalette::Mid);
+  m_systemDividerColor = palette.color(QPalette::Active, QPalette::Mid);
+  m_systemButtonBackground = palette.color(QPalette::Active, QPalette::Button);
+  m_systemButtonText = palette.color(QPalette::Active, QPalette::ButtonText);
+#endif
 
   QColor hover = m_systemHighlightColor;
   hover.setAlpha(45);

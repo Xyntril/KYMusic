@@ -212,13 +212,118 @@ jobs:
           ldd squashfs-root/usr/bin/kymusic 2>&1 | grep 'not found' || true
 
   # =============================================================
+  # Android ARM64 APK
+  # =============================================================
+
+  android:
+    name: Android ARM64 APK
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK & SDK components
+        run: |
+          yes | sdkmanager --licenses || true
+          sdkmanager --install "ndk;26.1.10909125" "cmdline-tools;latest" "build-tools;34.0.0" "platforms;android-34"
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/26.1.10909125" >> "$GITHUB_ENV"
+
+      - name: Install Ninja & Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Install Host Qt (for host tools)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.0'
+          host: 'linux'
+          target: 'desktop'
+          dir: '${{ runner.temp }}/qt-host'
+
+      - name: Install Android Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.0'
+          host: 'linux'
+          target: 'android'
+          arch: 'android_arm64_v8a'
+          modules: 'qtmultimedia qtshadertools qtsvg'
+
+      - name: Set Qt paths
+        run: |
+          echo "QT_HOST_PATH=${{ runner.temp }}/qt-host/6.8.0/gcc_64" >> "$GITHUB_ENV"
+          echo "QT_DIR=${{ env.Qt6_DIR }}" >> "$GITHUB_ENV"
+
+      - name: Build and install ECM (Extra CMake Modules)
+        run: |
+          git clone --depth 1 --branch v6.10.0 https://invent.kde.org/frameworks/extra-cmake-modules.git
+          cmake -B build-ecm -S extra-cmake-modules -DCMAKE_INSTALL_PREFIX="${{ env.Qt6_DIR }}"
+          sudo cmake --install build-ecm
+
+      - name: Build and install Kirigami for Android
+        run: |
+          git clone --depth 1 --branch v6.10.0 https://invent.kde.org/frameworks/kirigami.git
+          ${{ env.Qt6_DIR }}/bin/qt-cmake \
+            -B build-kirigami \
+            -S kirigami \
+            -DQT_HOST_PATH="${QT_HOST_PATH}" \
+            -DCMAKE_INSTALL_PREFIX="${{ env.Qt6_DIR }}" \
+            -DBUILD_TESTING=OFF \
+            -DBUILD_EXAMPLES=OFF
+          cmake --build build-kirigami --parallel
+          cmake --install build-kirigami
+
+      - name: Configure KYMusic for Android
+        run: |
+          ${{ env.Qt6_DIR }}/bin/qt-cmake \
+            -S . \
+            -B build-android \
+            -G Ninja \
+            -DQT_HOST_PATH="${QT_HOST_PATH}" \
+            -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build APK
+        run: |
+          cmake --build build-android --target apk --parallel || cmake --build build-android --target appYaMusic_make_apk --parallel
+
+      - name: Package APK artifact
+        run: |
+          VERSION="$(sed -nE '/^project\(/,/^\)/s/.*VERSION[[:space:]]+([0-9.]+).*/\1/p' CMakeLists.txt | head -1)"
+          APK_FILE="$(find build-android -name "*.apk" | head -n 1)"
+          if [ -z "$APK_FILE" ]; then
+            echo "::error::Не удалось найти собранный .apk файл в build-android"
+            exit 1
+          fi
+          echo "Найден APK: $APK_FILE"
+          cp "$APK_FILE" "KYMusic-${VERSION:-1.0.0}-arm64-v8a.apk"
+          ls -la KYMusic-*.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: KYMusic-*-arm64-v8a.apk
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+  # =============================================================
   # Release (только по тегам v*)
   # =============================================================
 
   release:
     name: Publish Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [linux, linux-compat]
+    needs: [linux, linux-compat, android]
     runs-on: ubuntu-24.04
 
     permissions:
@@ -246,12 +351,13 @@ jobs:
           {
             echo "## KYMusic ${GITHUB_REF_NAME}"
             echo
-            echo "Нативный клиент Яндекс Музыки для KDE Plasma и Plasma Mobile."
+            echo "Нативный клиент Яндекс Музыки для KDE Plasma, Plasma Mobile и Android."
             echo
             echo "### Установка"
             echo
             echo "- **Linux AppImage:** \`KYMusic-${VERSION}-x86_64.AppImage\` (сделайте исполняемым: \`chmod +x\` и запустите)"
             echo "- **Linux Tarball:** \`KYMusic-${VERSION}-linux-x86_64.tar.gz\`"
+            echo "- **Android APK:** \`KYMusic-${VERSION}-arm64-v8a.apk\`"
             echo
           } > release-notes.md
 
@@ -287,3 +393,4 @@ jobs:
           files: |
             artifacts/*.AppImage
             artifacts/*.tar.gz
+            artifacts/*.apk

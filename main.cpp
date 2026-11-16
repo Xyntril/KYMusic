@@ -4,13 +4,16 @@
 #include <QQmlContext>
 #include <QQuickStyle>
 #include <QQuickWindow>
+
+#if !defined(Q_OS_ANDROID)
 #include <KAboutData>
 #include <KIconTheme>
+#include "src/Core/KdeTrayController.h"
+#include "src/Core/KdeMenuManager.h"
+#endif
 
 #include "src/Core/AppController.h"
 #include "src/Core/AuthController.h"
-#include "src/Core/KdeTrayController.h"
-#include "src/Core/KdeMenuManager.h"
 
 #include "src/Crash/CrashHandler.h"
 #include "src/Yandex/Account/AccountService.h"
@@ -25,16 +28,24 @@
 
 int main(int argc, char *argv[])
 {
+#if !defined(Q_OS_ANDROID)
     // 1. Инициализация темы иконок KDE Plasma
     KIconTheme::initTheme();
+#endif
 
     // 2. Создание QApplication
     QApplication app(argc, argv);
 
-    // 3. Настройка стиля org.kde.desktop строго ПОСЛЕ создания QApplication
+    // 3. Настройка стиля строго ПОСЛЕ создания QApplication
+#if defined(Q_OS_ANDROID)
+    if (qEnvironmentVariableIsEmpty("QT_QUICK_CONTROLS_STYLE")) {
+        QQuickStyle::setStyle(QStringLiteral("Basic"));
+    }
+#else
     if (qEnvironmentVariableIsEmpty("QT_QUICK_CONTROLS_STYLE")) {
         QQuickStyle::setStyle(QStringLiteral("org.kde.desktop"));
     }
+#endif
 
     QCoreApplication::setOrganizationName("KDE");
     QCoreApplication::setOrganizationDomain("kde.org");
@@ -43,6 +54,7 @@ int main(int argc, char *argv[])
     QGuiApplication::setDesktopFileName("org.kde.kymusic");
     QCoreApplication::setApplicationVersion(QStringLiteral(YAMUSIC_VERSION));
 
+#if !defined(Q_OS_ANDROID)
     // Настройка KAboutData для системных окон «О программе» и «О KDE»
     KAboutData aboutData(
         QStringLiteral("kymusic"),
@@ -68,6 +80,7 @@ int main(int argc, char *argv[])
         QString(),
         QStringLiteral("https://github.com/andfriden/YaMusic")
     );
+#endif
 
     // Установка иконки приложения (Breeze HIG icon)
     QIcon appIcon(QStringLiteral(":/kymusic.svg"));
@@ -85,9 +98,13 @@ int main(int argc, char *argv[])
     }
     if (!appIcon.isNull()) {
         app.setWindowIcon(appIcon);
+#if !defined(Q_OS_ANDROID)
         aboutData.setProgramLogo(QVariant::fromValue(appIcon));
+#endif
     }
+#if !defined(Q_OS_ANDROID)
     KAboutData::setApplicationData(aboutData);
+#endif
 
     // Перехват падений ставится до первого окна
     Crash::install(QStringLiteral(YAMUSIC_VERSION));
@@ -108,12 +125,14 @@ int main(int argc, char *argv[])
         &accountService
     );
 
+#if !defined(Q_OS_ANDROID)
     // Системный трей KDE Plasma (KStatusNotifierItem) привязан к жизненному циклу app
     auto *trayController = new KdeTrayController(appController.playbackController(), &app);
 
     // Экспорт меню по D-Bus для Global Menu в панели KDE Plasma
     auto *menuManager = new KdeMenuManager(&appController, &authController, &app);
     Q_UNUSED(menuManager);
+#endif
 
     // 4. И только ПОСЛЕ настройки стиля и создания контроллеров — создание QQmlApplicationEngine
     QQmlApplicationEngine engine;

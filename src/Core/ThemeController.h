@@ -4,7 +4,9 @@
 #include <QObject>
 #include <QSettings>
 
+#if defined(HAVE_KF6_COLORSCHEME)
 class KColorSchemeManager;
+#endif
 
 // Контроллер темы — полная интеграция с системной темой KDE Plasma (Breeze, Oxygen и др.)
 class ThemeController : public QObject {
@@ -62,7 +64,9 @@ private:
 
   QString m_themeMode; // "system", "dark", "light"
   bool m_manualDark = false;
+#if defined(HAVE_KF6_COLORSCHEME)
   KColorSchemeManager *m_schemeManager = nullptr;
+#endif
 
   QColor m_systemWindowBackground;
   QColor m_systemViewBackground;

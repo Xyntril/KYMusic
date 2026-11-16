@@ -30,9 +30,11 @@
 #include <QGuiApplication>
 #include <QSettings>
 
+#if !defined(Q_OS_ANDROID)
 #include <KAboutApplicationDialog>
 #include <KAboutData>
 #include <KHelpMenu>
+#endif
 
 AppController::AppController(YandexAuth *auth, AccountService *accountService, QObject *parent)
     : QObject(parent), m_auth(auth), m_accountService(accountService),
@@ -1320,16 +1322,20 @@ void AppController::loadGenres() {
 }
 
 void AppController::showAboutAppDialog() {
+#if !defined(Q_OS_ANDROID)
   auto *dialog = new KAboutApplicationDialog(KAboutData::applicationData(), nullptr);
   dialog->setAttribute(Qt::WA_DeleteOnClose);
   dialog->show();
   dialog->raise();
   dialog->activateWindow();
+#endif
 }
 
 void AppController::showAboutKdeDialog() {
+#if !defined(Q_OS_ANDROID)
   auto *helpMenu = new KHelpMenu(nullptr, KAboutData::applicationData());
   helpMenu->aboutKDE();
+#endif
 }
 
 void AppController::openSettings() {

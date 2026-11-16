@@ -40,7 +40,7 @@ find_package(
         Multimedia
 )
 
-if(UNIX AND NOT APPLE)
+if(UNIX AND NOT APPLE AND NOT ANDROID)
 
     find_package(
             Qt6 6.6
@@ -60,19 +60,25 @@ endif()
 
 # Поиск пакетов KDE Frameworks 6
 find_package(KF6Kirigami REQUIRED)
-find_package(KF6ColorScheme REQUIRED)
-find_package(KF6CoreAddons REQUIRED)
-find_package(KF6IconThemes REQUIRED)
-find_package(KF6StatusNotifierItem REQUIRED)
-find_package(KF6XmlGui REQUIRED)
-find_package(KF6QQC2DesktopStyle QUIET)
+if(NOT ANDROID)
+    find_package(KF6ColorScheme REQUIRED)
+    find_package(KF6CoreAddons REQUIRED)
+    find_package(KF6IconThemes REQUIRED)
+    find_package(KF6StatusNotifierItem REQUIRED)
+    find_package(KF6XmlGui REQUIRED)
+    find_package(KF6QQC2DesktopStyle QUIET)
+endif()
 
 # Каталог модулей CMake (включая FindTagLib.cmake) — объявляем до
 # find_package(TagLib), чтобы модуль был найден по имени.
 list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # TagLib — запись тегов и вложенного артворка в скачанные файлы.
-find_package(TagLib REQUIRED)
+if(NOT ANDROID)
+    find_package(TagLib REQUIRED)
+else()
+    find_package(TagLib QUIET)
+endif()
 
 qt_standard_project_setup(REQUIRES 6.6)
 
@@ -190,8 +196,6 @@ set(
         src/Core/SearchController.cpp
         src/Core/AuthController.cpp
         src/Core/ThemeController.cpp
-        src/Core/KdeTrayController.cpp
-        src/Core/KdeMenuManager.cpp
         src/Core/PlaybackSettingsController.cpp
         src/Core/PreloadController.cpp
         src/Core/UpdateController.cpp
@@ -292,6 +296,14 @@ set(
 # Platform-specific sources
 # =============================================================
 
+if(NOT ANDROID)
+    list(
+            APPEND YAMUSIC_SOURCES
+            src/Core/KdeTrayController.cpp
+            src/Core/KdeMenuManager.cpp
+    )
+endif()
+
 if(APPLE)
 
     list(
@@ -306,9 +318,14 @@ if(APPLE)
             OBJCXX
     )
 
-endif()
+elseif(ANDROID)
 
-if(UNIX AND NOT APPLE)
+    list(
+            APPEND YAMUSIC_SOURCES
+            src/MediaControls/MediaControlsAndroid.cpp
+    )
+
+elseif(UNIX)
 
     list(
             APPEND YAMUSIC_SOURCES
@@ -661,6 +678,18 @@ set_target_properties(
         TRUE
 )
 
+if(ANDROID)
+    set_target_properties(
+            appYaMusic
+            PROPERTIES
+            QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android"
+            QT_ANDROID_TARGET_SDK_VERSION 34
+            QT_ANDROID_MIN_SDK_VERSION 26
+            QT_ANDROID_VERSION_NAME "${PROJECT_VERSION}"
+            QT_ANDROID_VERSION_CODE 1
+    )
+endif()
+
 # =============================================================
 # macOS bundle icon
 # =============================================================
@@ -693,14 +722,30 @@ target_link_libraries(
         Qt6::Multimedia
 
         KF6::Kirigami
-        KF6::ColorScheme
-        KF6::CoreAddons
-        KF6::IconThemes
-        KF6::StatusNotifierItem
-        KF6::XmlGui
-
-        TagLib::TagLib
 )
+
+if(NOT ANDROID)
+    target_link_libraries(
+            appYaMusic
+            PRIVATE
+
+            KF6::ColorScheme
+            KF6::CoreAddons
+            KF6::IconThemes
+            KF6::StatusNotifierItem
+            KF6::XmlGui
+    )
+    target_compile_definitions(appYaMusic PRIVATE HAVE_KF6_COLORSCHEME=1)
+endif()
+
+if(TagLib_FOUND)
+    target_link_libraries(
+            appYaMusic
+            PRIVATE
+            TagLib::TagLib
+    )
+    target_compile_definitions(appYaMusic PRIVATE HAVE_TAGLIB=1)
+endif()
 
 # =============================================================
 # Platform-specific libraries
@@ -717,7 +762,7 @@ if(APPLE)
 
 endif()
 
-if(UNIX AND NOT APPLE)
+if(UNIX AND NOT APPLE AND NOT ANDROID)
 
     target_link_libraries(
             appYaMusic
@@ -792,7 +837,7 @@ endif()
 # Linux desktop entry and icon
 # =============================================================
 
-if(UNIX AND NOT APPLE)
+if(UNIX AND NOT APPLE AND NOT ANDROID)
 
     set(
             YAMUSIC_DESKTOP_FILE
@@ -888,6 +933,8 @@ endif()
 #
 # Запуск: ctest --test-dir build
 # =============================================================
+
+if(NOT ANDROID)
 
 enable_testing()
 
@@ -1024,3 +1071,5 @@ add_test(
         NAME playlist_cover
         COMMAND tst_playlist_cover
 )
+
+endif()

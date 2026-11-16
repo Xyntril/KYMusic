@@ -17,6 +17,9 @@
 
 #ifdef Q_OS_WIN
 #include <windows.h>
+#elif defined(Q_OS_ANDROID)
+#include <fcntl.h>
+#include <unistd.h>
 #else
 #include <execinfo.h>
 #include <fcntl.h>
@@ -110,6 +113,8 @@ QString backtraceText() {
 
   // Символы на Windows требуют DbgHelp и доступа к pdb — адресов достаточно.
   return lines.join(QLatin1Char('\n'));
+#elif defined(Q_OS_ANDROID)
+  return QStringLiteral("(Android crash stack trace available in logcat)");
 #else
   void *frames[64] = {};
   const int count = ::backtrace(frames, 64);
